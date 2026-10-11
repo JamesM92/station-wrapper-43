@@ -5,7 +5,9 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
 
 ## [Unreleased]
 
-The first public release is planned as **0.5.0**. This section is everything since the last tag.
+## [0.7.0] - 2026-10-11
+
+The first public release.
 
 ### Added
 - **Captions on the IPTV stream.** A video's captions (a `.srt`/`.vtt`/`.ass` file beside it, or a text track inside it) in the language set on the Stations page (English by default) go out in the stream as a CEA-608 caption track, which players such as VLC and many TVs list under their captions button; a station can turn that off. A block of a station's calendar can instead draw them on the picture (*Draw the captions on the picture while this plays*), always visible, for the shows that need them (a Japanese show, not an English one). Jellyfin's own apps do not list an embedded caption track on live TV, so for Jellyfin use the picture option.
