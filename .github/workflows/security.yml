@@ -15,7 +15,7 @@ jobs:
     name: Static analysis and dependency audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v5
         with:
@@ -40,7 +40,7 @@ jobs:
     name: Repository scan (Trivy)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Scan dependencies, secrets and the Dockerfile
         # Needs Docker on the runner (the image builds need it too). The daemon can be remote, so the files are streamed in
