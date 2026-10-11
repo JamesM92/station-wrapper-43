@@ -10,7 +10,7 @@ How a release is made, and what to do the day this moves to GitHub.
 4. Merge with `--rebase` (a linear history). Then, on `main`: `git tag vX.Y.Z`, push the tag; the `release-image` workflow smoke-tests
    the image and publishes `:X.Y.Z` and `:latest`. Create the release notes from the changelog entry.
 
-## Before the first public release (0.5.0)
+## Before the first public release (0.7.0)
 
 - [ ] Everything under *Unreleased* in the changelog is true, and the version heading is dated.
 - [x] `scripts/e2e-breaks.py` and `scripts/e2e-seasons.py` pass against an image built from `dev` (14 of 14 and 7 of 7, 2026-10-11; both need port 5004 free).
