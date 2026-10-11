@@ -1,0 +1,35 @@
+# What the image installs with pip, pinned (a first-level choice is in the comments). Dependabot / `pip-audit -r requirements.txt`
+# watch this file. FieldStation42's own list is vendored under fieldstation42/src.
+# first level: fastapi uvicorn ffmpeg-python rich jsonschema requests mutagen pillow defusedxml
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.15.1
+attrs==26.1.0
+certifi==2026.7.22
+charset-normalizer==3.5.2
+click==8.5.0
+defusedxml==0.7.1
+fastapi==0.143.0
+ffmpeg-python==0.2.0
+future==1.0.0
+h11==0.16.0
+idna==3.20
+jsonschema-specifications==2025.9.1
+jsonschema==4.26.0
+markdown-it-py==4.2.0
+mdurl==0.1.2
+mutagen==1.48.1
+opentelemetry-api==1.45.1
+pillow==12.3.0
+pydantic==2.14.0
+pydantic_core==2.50.0
+pygments==2.21.0
+referencing==0.37.0
+requests==2.34.2
+rich==15.0.0
+rpds-py==2026.9.1
+starlette==1.7.0
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+urllib3==2.8.0
+uvicorn==0.54.0

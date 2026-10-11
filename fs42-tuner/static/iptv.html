@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Station Wrapper 43 -- Sources</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/dashboard.css">
+<link rel="stylesheet" href="/files.css">
+<link rel="stylesheet" href="/views.css">
+<link rel="stylesheet" href="/iptv.css">
+</head>
+<body>
+  <main id="dash">
+    <div class="view-head">
+      <h1>IPTV sources</h1>
+      <button type="button" class="btn primary" id="new-btn">Add a source</button>
+    </div>
+    <p class="dim">Other tuners, playlists of channels, and single streams such as cameras. Their channels get numbers of their own, join the lineup, the guide, the player and the dashboard (marked as an external IPTV source), and play through this container, so anything that can watch your own channels can watch these.</p>
+    <p id="msg" class="msg" role="status" aria-live="polite"></p>
+
+    <form id="form" class="panel src-form" hidden>
+      <h2 id="form-title">Add a source</h2>
+      <div class="field">
+        <label for="f-type">What it is</label>
+        <select id="f-type">
+          <option value="stream">A single stream (a camera, one channel)</option>
+          <option value="m3u">A playlist of channels (an .m3u or .m3u8 address)</option>
+          <option value="hdhomerun">Another HDHomeRun tuner</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="f-name">Name</label>
+        <input id="f-name" type="text" maxlength="80" required placeholder="Front door">
+      </div>
+      <div class="field">
+        <label for="f-url">Address</label>
+        <input id="f-url" type="text" required autocomplete="off" placeholder="rtsp://user:password@192.168.1.60:554/stream1">
+        <span class="hint" id="f-url-hint"></span>
+      </div>
+      <div class="field">
+        <label for="f-mode">How to play it</label>
+        <select id="f-mode">
+          <option value="convert">Convert it so a web browser can play it (uses more CPU)</option>
+          <option value="relay">Pass it on as it is (cheap; a browser may not be able to play it)</option>
+          <option value="guide" id="f-mode-guide">Guide only: its listings go in our guide, but Jellyfin plays the tuner's channels itself (tuners only)</option>
+        </select>
+      </div>
+      <div class="field" id="f-base-field">
+        <label for="f-base">First channel number</label>
+        <input id="f-base" type="number" min="1" max="99999" placeholder="automatic">
+        <span class="hint">Its channels are numbered from here (a tuner keeps its own numbers).</span>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn primary" id="f-save">Save</button>
+        <button type="button" class="btn" id="f-test">Test the address</button>
+        <button type="button" class="btn" id="f-cancel">Cancel</button>
+      </div>
+      <p id="f-result" class="dim" role="status"></p>
+    </form>
+
+    <section id="legacy" class="panel" hidden aria-label="Old setting"></section>
+    <section id="clashes" class="panel" hidden aria-label="Numbers that were taken"></section>
+    <section id="sources" class="sources" aria-label="Sources"></section>
+  </main>
+  <script src="/common.js"></script>
+  <script src="/iptv.js"></script>
+</body>
+</html>

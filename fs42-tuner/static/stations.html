@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Station Wrapper 43 -- Stations</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/dashboard.css">
+<link rel="stylesheet" href="/files.css">
+<link rel="stylesheet" href="/views.css">
+</head>
+<body>
+  <main id="dash">
+    <div class="view-head">
+      <h1>Stations</h1>
+      <a class="btn primary" id="new-btn" href="/station.html">New station</a>
+    </div>
+    <p id="msg" class="msg" role="status" aria-live="polite"></p>
+    <section class="panel" id="keeper" aria-label="Schedule keeper">
+      <h2>Keep schedules going</h2>
+      <p class="dim">FieldStation42 doesn't extend a station's schedule by itself, so without this a station goes off air when its scheduled days run out. When this is on, every station that already has a schedule is topped up to the number of days below. It only adds days; it never rebuilds anything, and it leaves a station alone while you are building it.</p>
+      <div class="ta-row">
+        <label class="check"><input type="checkbox" id="k-on"> Keep schedules topped up</label>
+        <label>Days shown ahead
+          <select id="k-days" aria-label="Days ahead">
+            <option value="3">3 days</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option>
+          </select>
+        </label>
+        <button type="button" class="btn primary" id="k-save">Save</button>
+      </div>
+      <p id="k-status" class="dim"></p>
+    </section>
+    <section class="panel" id="caption-language" aria-label="Captions">
+      <h2>Captions</h2>
+      <p class="dim">The language of the captions your videos are asked for: a <code>.srt</code>, <code>.vtt</code> or <code>.ass</code> file beside a video with the language in its name (<code>Show - 01.en.srt</code>), or a text track inside it. Stations carry them as a track a player can switch on; a block of a station's calendar can draw them on the picture instead.</p>
+      <div class="ta-row">
+        <label>Caption language
+          <select id="c-lang" aria-label="Caption language">
+            <option value="en">English</option><option value="ja">Japanese</option><option value="es">Spanish</option><option value="fr">French</option>
+            <option value="de">German</option><option value="it">Italian</option><option value="pt">Portuguese</option><option value="ko">Korean</option>
+            <option value="zh">Chinese</option><option value="ru">Russian</option>
+          </select>
+        </label>
+        <button type="button" class="btn primary" id="c-save">Save</button>
+      </div>
+      <p id="c-status" class="dim"></p>
+    </section>
+    <section id="cards" class="cards" aria-label="Stations"></section>
+  </main>
+  <script src="/common.js"></script>
+  <script src="/stations.js"></script>
+</body>
+</html>

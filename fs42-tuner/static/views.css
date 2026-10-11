@@ -1,0 +1,96 @@
+.topnav { display: flex; flex-wrap: wrap; gap: 0.3em 0.4em; align-items: center; margin-bottom: 1em; padding-bottom: 0.7em; border-bottom: 1px solid var(--line); }
+.topnav a { color: var(--text); text-decoration: none; padding: 0.35em 0.8em; border: 1px solid transparent; border-radius: 0.4em; }
+.topnav a:hover { border-color: var(--line); }
+.topnav a[aria-current="page"] { border-color: var(--accent); color: var(--accent); }
+.topnav a.adv { margin-left: auto; color: var(--dim); font-size: 0.9em; }
+
+.view-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6em; margin-bottom: 0.8em; }
+.view-head h1 { margin: 0; font-size: 1.4em; }
+.msg { min-height: 1.4em; margin: 0 0 0.8em; }
+.msg.ok { color: var(--accent); }
+.msg.err { color: var(--danger); }
+.dim { color: var(--dim); }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.8em; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 0.5em; padding: 0.8em; min-width: 0; }
+.card h2 { margin: 0; font-size: 1.1em; display: flex; gap: 0.5em; align-items: baseline; }
+.card .num { color: var(--accent); font-weight: 600; }
+.card .type { color: var(--dim); font-size: 0.8em; border: 1px solid var(--line); border-radius: 0.3em; padding: 0 0.4em; }
+.card .chips { display: flex; flex-wrap: wrap; gap: 0.3em; margin: 0.5em 0; }
+.chip { background: var(--panel-2); border: 1px solid var(--line); border-radius: 1em; padding: 0.1em 0.6em; font-size: 0.85em; }
+.card .status { margin: 0.4em 0; color: var(--dim); }
+.card .status.ok { color: var(--accent); }
+.card .status.warn { color: #e0a93a; }
+.card .status.bad { color: var(--danger); }
+.card .actions { display: flex; flex-wrap: wrap; gap: 0.4em; margin-top: 0.6em; }
+.card .why { color: var(--dim); font-size: 0.9em; margin: 0.4em 0; }
+.card .job { margin-top: 0.5em; color: var(--accent); font-size: 0.9em; }
+.empty-state { color: var(--dim); padding: 1.5em 0; }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 0.5em; padding: 1em; margin-bottom: 1em; }
+.panel h2 { margin: 0 0 0.6em; font-size: 1.05em; }
+.field { display: flex; flex-direction: column; gap: 0.25em; margin-bottom: 0.8em; max-width: 30em; }
+.field label, .field .label { color: var(--dim); font-size: 0.9em; }
+.field input[type=text], .field input[type=number], .field select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 0.4em; padding: 0.45em 0.6em; font: inherit; }
+.field input:disabled { opacity: 0.6; }
+.field .hint { color: var(--dim); font-size: 0.85em; }
+.radios { display: flex; gap: 1.2em; flex-wrap: wrap; }
+.radios label { color: var(--text); display: flex; gap: 0.4em; align-items: center; cursor: pointer; }
+.check { display: flex; gap: 0.5em; align-items: center; cursor: pointer; }
+
+.blocks { display: flex; flex-direction: column; gap: 0.6em; }
+.block { border: 1px solid var(--line); border-radius: 0.5em; padding: 0.6em; background: var(--panel-2); }
+.block .when { display: flex; flex-wrap: wrap; gap: 0.6em; align-items: center; margin-bottom: 0.5em; }
+.block .when select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 0.4em; padding: 0.3em 0.5em; font: inherit; }
+.lists { display: flex; flex-wrap: wrap; gap: 0.4em; }
+.lists label { display: flex; gap: 0.35em; align-items: center; background: var(--bg); border: 1px solid var(--line); border-radius: 1em; padding: 0.15em 0.7em; cursor: pointer; }
+.lists label:has(input:checked) { border-color: var(--accent); color: var(--accent); }
+.form-actions { display: flex; flex-wrap: wrap; gap: 0.5em; margin-top: 0.8em; }
+
+.sched-controls { display: flex; flex-wrap: wrap; gap: 0.6em; align-items: center; margin-bottom: 0.8em; }
+.sched-controls select, .sched-controls input[type=date] { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 0.4em; padding: 0.4em 0.6em; font: inherit; }
+.sched-note { margin: 0 0 0.8em; color: var(--dim); }
+.sched-note.warn { color: #e0a93a; }
+.sched-note.bad { color: var(--danger); }
+table.sched { width: 100%; border-collapse: collapse; }
+table.sched th, table.sched td { text-align: left; padding: 0.35em 0.6em; border-bottom: 1px solid var(--line); }
+table.sched th { color: var(--dim); font-weight: 500; font-size: 0.9em; }
+table.sched tr.now { background: rgba(79, 209, 197, 0.12); }
+table.sched tr.now td:first-child { color: var(--accent); font-weight: 600; }
+
+a.btn { text-decoration: none; display: inline-block; }
+
+#k-status.ok { color: var(--accent); }
+#k-status.err { color: var(--danger); }
+
+.topnav a.brand { font-weight: 700; color: var(--accent); margin-right: 0.6em; }
+
+.topnav a.warn { color: #e0a93a; }
+.login { max-width: 34em; }
+
+.daytabs { margin: 0.6em 0; }
+#dayhint { margin: 0.2em 0 0.8em; }
+#dayhint .btn { margin-left: 0.5em; }
+
+.twisty { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; padding: 0 0.2em; }
+table.sched tr.detail td { background: var(--panel-2); padding: 0.4em 0.8em 0.8em 2em; }
+ul.files { list-style: none; margin: 0; padding: 0; }
+ul.files li { display: flex; gap: 0.8em; padding: 0.15em 0; align-items: baseline; }
+ul.files .when { color: var(--dim); min-width: 5.5em; }
+ul.files .kind { min-width: 6.5em; color: var(--accent); font-size: 0.85em; }
+ul.files li.kind-bump .kind, ul.files li.kind-commercial .kind { color: var(--dim); }
+ul.files li.kind-bump, ul.files li.kind-commercial { color: var(--dim); }
+ul.files .file { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ul.files .len { color: var(--dim); }
+
+.copybar { display: inline-flex; flex-wrap: wrap; gap: 0.3em 0.6em; margin: 0 0.5em; vertical-align: middle; }
+.copybar label { display: inline-flex; gap: 0.25em; align-items: center; cursor: pointer; color: var(--text); }
+#dayhint .btn { margin: 0 0.2em; padding: 0.2em 0.7em; }
+
+ul.files .fname { color: var(--dim); font-size: 0.85em; }
+
+/* an element with the hidden attribute is hidden, whatever display a class gave it (a .field is a flex column) */
+[hidden] { display: none !important; }
+
+/* the TubeArchivist playlists on the Lists & files page can be a long list: it scrolls inside its card */
+#pl-list { max-height: 18em; overflow-y: auto; padding-right: 0.4em; }

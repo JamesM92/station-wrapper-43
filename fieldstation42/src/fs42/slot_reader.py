@@ -1,0 +1,180 @@
+from datetime import datetime
+import copy
+import random
+import math
+
+from fs42 import timings
+
+
+class SlotReader:
+
+    @staticmethod
+    def get_tag_from_slot(slot, when: datetime):
+        response = None
+        tag_index = None
+        if slot and "tags" in slot:
+            tags = slot["tags"]
+
+            is_random = False
+
+            if "random_tags" in slot and slot["random_tags"]:
+                is_random = True
+
+            if type(tags) is list:
+                if is_random:
+                    tag_index = random.randrange(len(tags))
+                    response = tags[tag_index]
+                else:
+                    # first, figure out what our segments are
+                    num_tags = len(tags)
+                    # get the duration of the segmentations in minutes
+                    segment_duration = math.floor(60/num_tags)
+                    # figure out what segment we are in
+                    current_segment = math.floor(when.minute/segment_duration)
+                    # make sure its not too long
+                    if current_segment >= num_tags:
+                        current_segment = num_tags-1
+                    tag_index = current_segment
+                    response = tags[current_segment]
+                    
+            else:
+                response = tags
+
+        return response, tag_index
+
+    @staticmethod
+    def _date_key_matches(date_key, when: datetime):
+        # match date_overrides keys like "April 23" or "December 24 - January 2"
+        try:
+            parts = [part.strip() for part in date_key.split(" - ")]
+
+            if len(parts) == 1:
+                parsed = datetime.strptime(parts[0], "%B %d")
+                return parsed.month == when.month and parsed.day == when.day
+
+            if len(parts) == 2:
+                start = datetime.strptime(parts[0], "%B %d")
+                end = datetime.strptime(parts[1], "%B %d")
+
+                current_md = (when.month, when.day)
+                start_md = (start.month, start.day)
+                end_md = (end.month, end.day)
+
+                # normal same-year range, e.g. "April 23 - April 25"
+                if start_md <= end_md:
+                    return start_md <= current_md <= end_md
+
+                # wraparound range, e.g. "December 24 - January 2"
+                return current_md >= start_md or current_md <= end_md
+
+            return False
+        except ValueError:
+            return False
+
+    @staticmethod
+    def _get_date_override(conf, when: datetime):
+        overrides = conf.get("date_overrides", {})
+
+        if not isinstance(overrides, dict):
+            return None
+
+        for date_key, override_conf in overrides.items():
+            if SlotReader._date_key_matches(date_key, when):
+                return override_conf
+
+        return None
+
+    @staticmethod
+    def _get_week_override(conf, when: datetime):
+        overrides = conf.get("week_overrides", {})
+
+        if not isinstance(overrides, dict):
+            return None
+
+        for date_key, week_schedule in overrides.items():
+            if SlotReader._date_key_matches(date_key, when):
+                return week_schedule
+
+        return None
+
+    @staticmethod
+    def get_break_info(conf, when: datetime):
+        slot, slot_num = SlotReader.get_slot(conf, when)
+        if slot is None:
+            slot = {}
+        break_info = {
+            "break_strategy" : slot.get("break_strategy", None),
+            "start_bump" : slot.get("start_bump", None),
+            "end_bump"  : slot.get("end_bump", None),
+        }
+        return break_info
+
+    @staticmethod
+    def get_slot(conf, when: datetime):
+        slot_number = str(when.hour)
+        day_str = timings.DAYS[when.weekday()]
+
+        # highest priority: exact date override
+        date_override = SlotReader._get_date_override(conf, when)
+        if date_override and slot_number in date_override:
+            return date_override[slot_number], slot_number
+
+        # second priority: week override for date range
+        week_override = SlotReader._get_week_override(conf, when)
+        if week_override is not None:
+            if day_str in week_override and slot_number in week_override[day_str]:
+                return week_override[day_str][slot_number], slot_number
+
+        # fallback: normal weekday schedule
+        response = None
+        if day_str in conf:
+            if slot_number in conf[day_str]:
+                response = conf[day_str][slot_number]
+
+        return response, slot_number
+
+    @staticmethod
+    def _smooth_week(source_days, target_days, network_name, where=""):
+        # smooths tags across slot boundaries for one week-shaped mapping of day -> slots
+        last_tag = None
+        for day_index in timings.DAYS:
+            if day_index not in source_days:
+                continue
+            for slot_index in timings.OPERATING_HOURS:
+                slot_index = str(slot_index)
+                if slot_index in source_days[day_index]:
+                    if "tags" in source_days[day_index][slot_index]:
+                        last_tag = source_days[day_index][slot_index]
+                    elif "continued" in source_days[day_index][slot_index]:
+                        if source_days[day_index][slot_index]["continued"]:
+                            if last_tag is None:
+                                raise ValueError(
+                                    f"'continued' at hour {slot_index} on {day_index} {where}for "
+                                    f"'{network_name}' has no preceding tags slot to inherit from"
+                                )
+                            target_days[day_index][slot_index]["tags"] = last_tag["tags"]
+
+    @staticmethod
+    def smooth_tags(conf):
+        # this function smooths tags through slot boundaries - so if not specified will use previous slots tag.
+        smoothed = copy.deepcopy(conf)
+        for day_index in timings.DAYS:
+            smoothed[day_index] = copy.deepcopy(conf[day_index])
+
+        network_name = conf.get("network_name", "unknown")
+        SlotReader._smooth_week(conf, smoothed, network_name)
+
+        # week overrides are day-shaped too, so they need smoothing in their own right - otherwise
+        # a day template that resolves fine on a normal weekday yields a tagless slot in an override
+        week_overrides = conf.get("week_overrides", {})
+        if isinstance(week_overrides, dict):
+            for date_key, week_schedule in week_overrides.items():
+                if isinstance(week_schedule, dict):
+                    SlotReader._smooth_week(
+                        week_schedule,
+                        smoothed["week_overrides"][date_key],
+                        network_name,
+                        where=f"in week_overrides '{date_key}' ",
+                    )
+
+        return smoothed

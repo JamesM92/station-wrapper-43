@@ -1,0 +1,20 @@
+/* the Sources page (iptv.html) */
+.src-form .field { display: grid; gap: 0.25em; margin: 0.7em 0; }
+.src-form input[type=text], .src-form input[type=number], .src-form select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 0.4em; padding: 0.45em 0.6em; font: inherit; max-width: 40em; }
+.sources { display: grid; gap: 0.9em; margin-top: 1em; }
+.source { border: 1px solid var(--line); border-radius: 0.6em; padding: 0.8em 1em; background: var(--panel); }
+.source.off { opacity: 0.6; }
+.source h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.6em; margin: 0 0 0.3em; font-size: 1.1em; }
+.source .kind { font-size: 0.75em; color: var(--dim); border: 1px solid var(--line); border-radius: 1em; padding: 0.05em 0.6em; }
+.source .addr { color: var(--dim); font-size: 0.85em; word-break: break-all; }
+.source .state.err { color: var(--danger); }
+.source .state.ok { color: #6bbf8a; }
+.source .row { display: flex; flex-wrap: wrap; gap: 0.4em; margin: 0.6em 0 0; align-items: center; }
+.source details { margin-top: 0.7em; }
+.source summary { cursor: pointer; color: var(--accent); }
+.chan-table { width: 100%; border-collapse: collapse; margin-top: 0.5em; font-size: 0.9em; }
+.chan-table th, .chan-table td { text-align: left; padding: 0.25em 0.5em; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.chan-table input[type=text] { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 0.3em; padding: 0.2em 0.4em; font: inherit; width: 100%; box-sizing: border-box; }
+.chan-table input.num { width: 5em; }
+.chan-table tr.off td { opacity: 0.55; }
+.chan-table .logo { width: 2em; height: 1.4em; object-fit: contain; }

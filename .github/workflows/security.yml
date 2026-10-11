@@ -1,0 +1,53 @@
+name: security
+
+# Static analysis, dependency audit, secret scan and a repository scan. They run on every push to dev and main, on pull requests to
+# main (the gated release sequence), and weekly (new advisories appear without a code change).
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 5 * * 1"
+
+jobs:
+  code:
+    name: Static analysis and dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install scanners
+        run: pip install bandit pip-audit detect-secrets
+
+      - name: Static scan of our code (bandit, medium and above fail)
+        # fieldstation42/src is vendored upstream code, not ours to fix. A finding that is on purpose carries a `# nosec` with why.
+        run: bandit -r fs42-tuner scripts supervisor fs42-sync ta-nfo --severity-level medium -x '*/test_*.py,*/e2e-*.py' -q
+
+      - name: Audit what the image installs (pip-audit, a known vulnerability fails)
+        run: pip-audit -r requirements.txt
+
+      - name: Secret scan (detect-secrets, against the reviewed baseline)
+        run: |
+          git ls-files -z | grep -zvE '^(fieldstation42/src/|\.secrets\.baseline$|assets/)|\.(mp4|jpg|png)$' \
+            | xargs -0 detect-secrets-hook --baseline .secrets.baseline
+
+  repo:
+    name: Repository scan (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan dependencies, secrets and the Dockerfile
+        # Needs Docker on the runner (the image builds need it too). The daemon can be remote, so the files are streamed in
+        # rather than bind-mounted. HIGH and CRITICAL fail the run; .trivyignore holds the findings that are decided, each with why.
+        run: |
+          tar --exclude=.git --exclude=fieldstation42/src -cf - . \
+            | docker run --rm -i --entrypoint sh aquasec/trivy:0.58.1 -c '
+                mkdir /src && tar xf - -C /src &&
+                trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --exit-code 1 \
+                  --ignorefile /src/.trivyignore /src'

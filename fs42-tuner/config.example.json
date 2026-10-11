@@ -1,0 +1,44 @@
+{
+  "_comment": "Standalone deployment: no Jellyfin, no NextPVR. This container serves its own web portal at / (mpegts.js player, channel controls, guide grid) reachable directly in a browser. Paths below are as seen INSIDE the tuner container.",
+  "_db_path": "FieldStation42's own default -- runtime/fs42_fluid.db, relative to its WORKDIR /app -- not a name this project invented. Must match whatever FS42's confs/main_config.json sets if you've overridden it there.",
+  "db_path": "/app/runtime/fs42_fluid.db",
+  "catalog_root": "/app",
+  "_library_root": "Optional. The content folder the dashboard Library section reads, read-only. Default: <catalog_root>/catalog/by-genre, where the channel generator puts its links.",
+  "_channels": "channel number -> FS42 network_name (must match the 'network_name' field in that station's confs/*.json exactly). No Jellyfin/HDHomeRun consumer here, so no external numbering scheme to avoid -- pick whatever numbers you like. The portal sorts and displays them as given.",
+  "channels": {
+    "801": "PublicDomain",
+    "802": "ClassicMovies",
+    "803": "PBS"
+  },
+  "_passthrough": "Left off, not deleted: this is a standalone deployment with no real HDHomeRun to relay. The passthrough/upstream code paths in tuner.py and upstream.py stay in place unused. Re-add {\"url\": \"http://<device>\", \"mode\": \"proxy\"} only if a real tuner is ever wired in behind this.",
+  "_favorite_fs42_channels": "Jellyfin-only (maps onto ChannelInfo.IsFavorite in its Live TV UI). Harmless but inert without a Jellyfin/HDHomeRun consumer reading lineup.json -- the portal ignores it. Left in rather than stripped out.",
+  "favorite_fs42_channels": true,
+  "_device_id": "HDHomeRun-emulation identity, unused by the portal. Derived from advertise_url if omitted.",
+  "_max_encoders": "How many DISTINCT channels may encode at once. This is the real CPU cost: budget roughly one core per encoder at 720p with libx264 veryfast. Independent of the passthrough budget: OTA streams are relayed, not encoded, and are counted separately against the real device's physical tuners.",
+  "max_encoders": 4,
+  "_tuner_count": "Client connections allowed for FieldStation42 channels. The TunerCount advertised to Jellyfin is this plus the real device's physical tuners, since one lineup fronts both. Set it above max_encoders: viewers crowded onto the same channel share one encoder, so this is the number of PEOPLE, not the number of streams being produced.",
+  "tuner_count": 12,
+  "_linger_seconds": "Keep an encoder warm this long after its last viewer leaves, so a channel flip away and back doesn't rebuild it.",
+  "linger_seconds": 10,
+  "guide_hours": 48,
+  "_guide": "FieldStation42's own schedule only -- the only source the portal's guide grid actually needs. 'hdhomerun' and 'xmltv' source types still work if you ever want them, but there's no passthrough device or external feed configured here to merge in.",
+  "guide": {
+    "refresh_minutes": 60,
+    "sources": []
+  },
+  "port": 5004,
+  "_advertise_url": "Only feeds the unused HDHomeRun-emulation endpoints (lineup.json's URL field, device.xml) -- the portal itself always fetches /auto/v{n} as a relative path, so this doesn't need to be reachable from viewers' browsers for the portal to work. Still required at startup (non-optional key). Set it to this host's real address anyway so those endpoints aren't actively wrong if something ever reads them.",
+  "advertise_url": "http://192.168.1.10:5004",
+  "friendly_name": "Station Wrapper 43",
+  "_video": "Every segment is re-encoded to these exact parameters. Uniformity is what keeps clients alive across programme boundaries. Swap vcodec for h264_vaapi / h264_nvenc / h264_qsv if you have hardware to spare.",
+  "video": {
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "vcodec": "libx264",
+    "preset": "veryfast",
+    "vbitrate": "4000k",
+    "bufsize": "8000k",
+    "abitrate": "192k"
+  }
+}

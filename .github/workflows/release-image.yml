@@ -1,0 +1,37 @@
+name: release-image
+
+# Publishes the versioned image when a v* tag is pushed: :<version> and :latest. Tags are
+# created only after the dev -> main PR has gone green (see the gated release sequence).
+# The image is smoke-tested first; nothing is pushed if that fails.
+on:
+  push:
+    tags: ["v*"]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: station-wrapper-43
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build, smoke-test, push
+        run: |
+          set -euo pipefail
+          image="$REGISTRY/$(echo "${{ github.repository_owner }}" | tr A-Z a-z)/$IMAGE"
+          ver="${GITHUB_REF_NAME#v}"
+          docker build -t "$image:$ver" -t "$image:latest" \
+            --build-arg BUILD_REF="$ver" --build-arg BUILD_SHA="$(echo "${{ github.sha }}" | cut -c1-7)" \
+            --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" .
+          scripts/smoke-image.sh "$image:$ver"
+          docker run --rm aquasec/trivy:0.58.1 image --severity HIGH,CRITICAL --exit-code 0 "$image:$ver" || true
+          docker push "$image:$ver"
+          docker push "$image:latest"

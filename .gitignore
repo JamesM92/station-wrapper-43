@@ -1,0 +1,17 @@
+# host-specific paths
+.env
+
+# runtime artifacts
+*.db
+*.log
+__pycache__/
+*.pyc
+
+# FieldStation42 sample videos (~125 MB): too large to keep in the repository and not
+# needed. scripts/sync-fs42.sh restores them if a station ever references them.
+fieldstation42/src/docs/signoff.mp4
+fieldstation42/src/docs/static.mp4
+fieldstation42/src/docs/off_air_pattern.mp4
+
+# the demo library scripts/fetch-demo-media.py downloads (public domain, but not ours to ship)
+demo-media/

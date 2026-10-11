@@ -1,0 +1,29 @@
+Station Wrapper 43
+Copyright 2026 JamesM92. The wrapper's own code is under the PolyForm Noncommercial License 1.0.0 (see LICENSE).
+
+This project includes, runs or downloads the following third-party software. Each keeps its own license; none of them is changed
+here (FieldStation42 is run as it is, and everything else is fetched or installed at build time).
+
+FieldStation42                       https://github.com/shane-mason/FieldStation42
+    Mozilla Public License 2.0. A copy of upstream is vendored, unmodified, under fieldstation42/src (its LICENSE is kept there).
+    The wrapper changes nothing in it: behaviour is adjusted by fieldstation42/console_launch.py, which wraps a few methods at run
+    time. The source of the vendored copy is the upstream repository at the commit named in fieldstation42/FS42_REF.
+
+TA_NFOWriter                         https://github.com/JamesM92/TA_NFOWriter
+    MIT License. Downloaded at build time (version and SHA-256 are pinned in the Dockerfile).
+
+mpegts.js                            https://github.com/xqq/mpegts.js
+    Apache License 2.0. Downloaded at build time (version and SHA-256 are pinned in the Dockerfile) and served to the web player.
+
+FFmpeg                               https://ffmpeg.org
+    LGPL 2.1 or later / GPL 2 or later, depending on the build. Installed from the base image's package repository and run as a
+    separate program; it is not linked into this project.
+
+Python packages                      see requirements.txt
+    fastapi (MIT), uvicorn (BSD-3-Clause), ffmpeg-python (Apache-2.0), rich (MIT), jsonschema (MIT), requests (Apache-2.0),
+    mutagen (GPL-2.0-or-later, used as a separate library for reading audio tags), pillow (HPND), defusedxml (PSF-2.0), and their
+    dependencies, each under its own license. They are installed at build time from PyPI.
+
+DejaVu fonts                         https://dejavu-fonts.github.io
+    Free license (Bitstream Vera derived), pulled in by the base image's Tk package and used to draw the TV guide channel and channel
+    logos.

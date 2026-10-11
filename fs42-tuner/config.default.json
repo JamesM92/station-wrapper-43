@@ -1,0 +1,37 @@
+{
+  "_comment": "The tuner's starting config. The container copies this to /config/config.json the first time it starts, if that file isn't there, and never overwrites it after. scripts/build_channels.py fills in `channels`. Paths are as seen INSIDE the container. Every key is explained in config.example.json.",
+  "db_path": "/app/runtime/fs42_fluid.db",
+  "catalog_root": "/app",
+  "_channels": "Written by scripts/build_channels.py: channel number -> station network_name. You can also add your own. A station that doesn't exist yet just shows as off air.",
+  "channels": {},
+  "favorite_fs42_channels": true,
+  "max_encoders": 4,
+  "tuner_count": 12,
+  "linger_seconds": 10,
+  "guide_hours": 48,
+  "guide": {
+    "refresh_minutes": 60,
+    "sources": []
+  },
+  "dvr": {
+    "enabled": false,
+    "nzb_folder": "/dvr/nzb",
+    "watch_folder": "/dvr/completed",
+    "pre_roll_seconds": 30,
+    "post_roll_seconds": 120
+  },
+  "port": 5004,
+  "_advertise_url": "Only used by Jellyfin/HDHomeRun clients, through lineup.json. Set it to this host's real address if you use one. The web portal does not use it.",
+  "advertise_url": "http://localhost:5004",
+  "friendly_name": "Station Wrapper 43",
+  "video": {
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "vcodec": "libx264",
+    "preset": "veryfast",
+    "vbitrate": "4000k",
+    "bufsize": "8000k",
+    "abitrate": "192k"
+  }
+}

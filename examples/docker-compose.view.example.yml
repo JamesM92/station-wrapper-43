@@ -1,0 +1,25 @@
+# ALTERNATIVE to the built-in view builder (TA_ENABLED=1 in .env), which builds the view
+# inside the container and needs none of this. Use this file only if you
+# run ta_nfo.py yourself on the host.
+#
+# For a TubeArchivist view (the folder TA_NFOWriter builds) that lives on LOCAL
+# disk while your media and the TubeArchivist library stay on the NAS.
+#
+# Why: the view is a folder of symlinks, which SMB shares handle badly. On local
+# disk, each link points at a file on the share and is read through the
+# container's own mount, which is ordinary file access.
+#
+# Use it:
+#   1. Build the view locally:  python3 ta_nfo.py /mnt/media/tubearchivist --view-dir "$FS42_VIEW_ROOT"
+#   2. Put FS42_VIEW_ROOT=/some/local/path in .env
+#   3. cp examples/docker-compose.view.example.yml docker-compose.override.yml
+#      (Compose reads that file automatically.) Then: docker compose up -d
+#   4. Point the generator at it:  --tv-library "$FS42_VIEW_ROOT"
+#
+# The folder is mounted at the SAME path as on the host, read-only, because the links
+# are made with host paths. The TubeArchivist library must be visible in the container
+# too (it is, if it sits under FS42_MEDIA_ROOT).
+services:
+  station-wrapper-43:
+    volumes:
+      - ${FS42_VIEW_ROOT:?set FS42_VIEW_ROOT in .env}:${FS42_VIEW_ROOT}:ro

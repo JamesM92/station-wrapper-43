@@ -1,0 +1,20 @@
+name: Something is wrong
+description: A page, a channel, the guide or a build is not doing what it should
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Press "Download diagnostics" on the Status page and paste the file here (passwords and tokens are left out). Look it over first.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown on the Status page.

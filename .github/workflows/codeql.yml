@@ -1,0 +1,31 @@
+name: codeql
+
+# GitHub's own code scanning for what the wrapper is written in. Results appear under the repository's Security tab.
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "41 4 * * 2"
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # the vendored FieldStation42 is upstream's code, not ours to fix here
+          config: |
+            paths-ignore:
+              - fieldstation42/src
+      - uses: github/codeql-action/analyze@v3

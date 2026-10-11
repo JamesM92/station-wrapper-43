@@ -1,0 +1,42 @@
+name: upstream-compat
+
+# Early warning: does the wrapper still work with the NEXT FieldStation42?
+# Every week (and on demand) this fetches upstream's latest commit into a
+# scratch folder and runs the same checks that scripts/sync-fs42.sh runs after
+# an update. The vendored copy is not touched. A failure means "if you sync to
+# upstream now, something breaks", so you hear about it before you update.
+#
+# Scheduled runs use the default branch, so this starts working once it is on
+# main. REQUIRES: a runner that can reach github.com (actions/checkout needs it too).
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  compat:
+    name: Wrapper vs upstream FieldStation42
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install defusedxml jsonschema
+
+      - name: Fetch upstream FieldStation42
+        run: |
+          git clone --depth 1 https://github.com/shane-mason/FieldStation42.git "${{ runner.temp }}/fs42-upstream"
+          echo "pinned:   $(cut -c1-7 fieldstation42/FS42_REF)"
+          echo "upstream: $(git -C "${{ runner.temp }}/fs42-upstream" rev-parse --short HEAD)"
+
+      - name: Contract check (console routes, answers, CLI, schedule database)
+        run: python3 scripts/check-fs42-contract.py "${{ runner.temp }}/fs42-upstream"
+
+      - name: Generated station configs against upstream's schema
+        env:
+          FS42_SRC: ${{ runner.temp }}/fs42-upstream
+        run: python3 scripts/test_build_channels.py FieldStationSchemaTest

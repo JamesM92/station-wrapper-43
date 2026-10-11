@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Station Wrapper 43 -- Watch</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main id="app">
+    <div id="screen">
+      <video id="video" autoplay muted playsinline></video>
+      <div id="banner" class="hidden">
+        <span id="banner-num"></span>
+        <span id="banner-name"></span>
+        <span id="banner-title"></span>
+      </div>
+      <div id="captions" class="hidden" aria-live="off"></div>
+      <div id="toast" class="hidden"></div>
+    </div>
+
+    <div id="controls">
+      <button id="chan-down" aria-label="Channel down">&#9660;</button>
+      <div id="chan-display">--</div>
+      <button id="chan-up" aria-label="Channel up">&#9650;</button>
+      <form id="chan-entry" autocomplete="off">
+        <input id="chan-input" inputmode="numeric" placeholder="Channel #" autocomplete="off">
+        <button type="submit">Go</button>
+      </form>
+      <button id="mute-btn" aria-label="Mute" title="Mute (M)">&#128263;</button>
+      <input id="volume" type="range" min="0" max="100" step="1" value="100" aria-label="Volume" title="Volume (left and right arrow keys)">
+      <button id="cc-btn" class="hidden" aria-label="Captions" title="Captions (C)">CC</button>
+      <span id="cc-sync" class="hidden">
+        <button id="cc-earlier" aria-label="Show captions earlier" title="Captions show too late: show them earlier">&minus;</button>
+        <span id="cc-offset">0.0s</span>
+        <button id="cc-later" aria-label="Show captions later" title="Captions show too early: show them later">+</button>
+      </span>
+      <button id="guide-toggle">Guide</button>
+      <a id="home-link" href="/">Channels</a>
+    </div>
+
+    <section id="guide" class="hidden" aria-label="Channel guide">
+      <div id="guide-grid"></div>
+    </section>
+  </main>
+
+  <script src="/mpegts.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

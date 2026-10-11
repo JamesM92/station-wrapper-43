@@ -1,0 +1,20 @@
+#!/bin/sh
+# The channel tools, run inside the container so nothing is installed on the host:
+#
+#   docker exec <container> fs42-channels init                    look at your media, write /config/groups.toml
+#   docker exec <container> fs42-channels build --dry-run         preview the channels
+#   docker exec <container> fs42-channels build                   build them
+#   docker exec <container> fs42-channels link TAG SOURCE...      put videos from the pool into a tag folder
+#
+# Every option of the scripts works after the word (add --help). Inside the container the
+# catalog, the config, the manifest (/config/groups.toml) and the media paths are already known.
+cmd="${1:-help}"
+[ $# -gt 0 ] && shift
+case "$cmd" in
+  init)  exec python3 /opt/wrapper/init.py "$@" ;;
+  build) exec python3 /opt/wrapper/build_channels.py "$@" ;;
+  link)  exec python3 /opt/wrapper/fs42_link.py "$@" ;;
+  *)
+    sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+    [ "$cmd" = help ] || [ "$cmd" = --help ] || exit 2 ;;
+esac

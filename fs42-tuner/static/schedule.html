@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Station Wrapper 43 -- Schedule</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/dashboard.css">
+<link rel="stylesheet" href="/files.css">
+<link rel="stylesheet" href="/views.css">
+</head>
+<body>
+  <main id="dash">
+    <div class="view-head"><h1>Schedule</h1></div>
+    <p id="msg" class="msg" role="status" aria-live="polite"></p>
+    <div class="sched-controls">
+      <select id="station" aria-label="Station"></select>
+      <button type="button" class="btn" id="prev" aria-label="Previous day">◀</button>
+      <input type="date" id="date" aria-label="Day">
+      <button type="button" class="btn" id="next" aria-label="Next day">▶</button>
+      <button type="button" class="btn" id="today">Today</button>
+      <button type="button" class="btn" id="extend">Add 7 days</button>
+    </div>
+    <p id="note" class="sched-note"></p>
+    <table class="sched" id="table" hidden>
+      <thead><tr><th>Time</th><th>Playing</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p id="empty" class="empty-state" hidden></p>
+  </main>
+  <script src="/common.js"></script>
+  <script src="/schedule.js"></script>
+</body>
+</html>

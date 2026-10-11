@@ -1,0 +1,6 @@
+# Findings that were looked at and decided. One id per line, each with why.
+
+# The container runs its services as root. Deliberate: the volumes (/config, the catalog, the media's symlink pool) belong to the
+# person who made them, and the services chown what they write back to them, which needs root. Run it with --cap-drop ALL,
+# read-only media mounts and no published ports but 5004 (see SECURITY.md).
+AVD-DS-0002

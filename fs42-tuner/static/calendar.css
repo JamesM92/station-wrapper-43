@@ -1,0 +1,58 @@
+/* the week calendar (calendar.js) and the schedule editor around it */
+.sched-opts, .event-form { display: flex; flex-wrap: wrap; gap: 0.6em 1.2em; align-items: end; margin: 0.6em 0; }
+.sched-opts label, .event-form label { display: flex; flex-direction: column; gap: 0.2em; color: var(--dim); font-size: 0.9em; }
+.sched-opts label.check, .event-form label.check { flex-direction: row; align-items: center; gap: 0.4em; }
+.sched-opts select, .sched-opts input[type=number], .event-form select, .event-form input { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 0.4em; padding: 0.35em 0.5em; font: inherit; }
+.event-form { border: 1px solid var(--line); border-radius: 0.5em; padding: 0.7em; }
+.event-form fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.4em 0.8em; align-items: end; }
+.event-list { display: grid; gap: 0.3em; margin: 0.6em 0; }
+.event-list .event { display: flex; flex-wrap: wrap; gap: 0.4em 1em; align-items: center; padding: 0.4em 0.6em; border: 1px solid var(--line); border-radius: 0.4em; cursor: pointer; }
+.event-list .event[aria-current=true] { border-color: var(--accent); }
+.event-list .event .when { color: var(--dim); font-size: 0.9em; flex: 1; }
+.layer-tabs { margin: 0.6em 0 0.2em; }
+.slot-editor { border: 1px solid var(--line); border-radius: 0.5em; padding: 0.6em 0.8em; margin: 0.6em 0; display: grid; gap: 0.5em; }
+.slot-editor .lists { display: flex; flex-wrap: wrap; gap: 0.3em 1em; }
+.slot-editor .row { display: flex; flex-wrap: wrap; gap: 0.4em; align-items: center; }
+.preview { display: flex; flex-wrap: wrap; gap: 0.3em; margin-top: 0.8em; }
+.preview .day { font-size: 0.8em; border-radius: 0.35em; padding: 0.25em 0.5em; border: 1px solid var(--line); background: var(--panel-2); }
+.preview .day.season { border-color: #3d8b6e; }
+.preview .day.event { border-color: #d29b3d; background: rgba(210, 155, 61, 0.15); }
+.preview .day b { display: block; font-weight: 600; }
+
+.cal { width: 100%; overflow-x: auto; }
+.cal-head, .cal-body { display: grid; min-width: 36em; }
+.cal-head { position: sticky; top: 0; z-index: 3; background: var(--panel); }
+.cal-colhead { display: flex; align-items: center; justify-content: space-between; gap: 0.2em; padding: 0.2em 0.35em; font-size: 0.85em; font-weight: 600; border-left: 1px solid var(--line); }
+.cal-mini { background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 0.3em; padding: 0 0.3em; cursor: pointer; font-size: 0.9em; line-height: 1.4; }
+.cal-mini:hover { border-color: var(--accent); color: var(--text); }
+.cal-hours .cal-hour { font-size: 0.7em; color: var(--dim); text-align: right; padding-right: 0.4em; box-sizing: border-box; border-top: 1px solid var(--line); }
+.cal-col { position: relative; border-left: 1px solid var(--line); cursor: crosshair; touch-action: none;
+  background-image: linear-gradient(to bottom, var(--line) 1px, transparent 1px), linear-gradient(to bottom, rgba(128, 128, 128, 0.12) 1px, transparent 1px);
+  background-size: 100% 36px, 100% 18px; user-select: none; }
+.cal-block { position: absolute; left: 2px; right: 2px; border-radius: 0.3em; color: #fff; font-size: 0.75em; overflow: hidden; box-sizing: border-box; padding: 0.15em 0.3em;
+  display: flex; flex-direction: column; border: 1px solid rgba(255, 255, 255, 0.25); cursor: grab; }
+.cal-block.selected { outline: 2px solid var(--accent); z-index: 2; }
+.cal-block.ghost { opacity: 0.22; pointer-events: none; }
+.cal-block.drawing { background: rgba(80, 160, 255, 0.35); border: 1px dashed #8bc0ff; pointer-events: none; z-index: 4; }
+.cal-text { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.cal-block.short { flex-direction: row; align-items: center; gap: 0.5em; padding-top: 0; padding-bottom: 0; line-height: 1; }
+.cal-block.short .cal-text { flex: 1; min-width: 0; white-space: nowrap; }
+.cal-block.short .cal-time { white-space: nowrap; font-size: 0.85em; }
+.cal-time { opacity: 0.8; font-size: 0.9em; }
+.cal-handle { position: absolute; left: 0; right: 0; height: 7px; cursor: ns-resize; }
+.cal-handle.from { top: -2px; }
+.cal-handle.to { bottom: -2px; }
+.slot-editor .lists .show-picker { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 0.4em; margin-top: 0.4em; }
+.slot-editor .lists .show-picker select { max-width: 14em; }
+
+/* the chooser: lists, series, seasons, folders and videos, one tree (station.js) */
+.chooser { display: grid; gap: 0.4em; }
+.chooser .chips { display: flex; flex-wrap: wrap; gap: 0.3em; }
+.chooser .chip { display: inline-flex; align-items: center; gap: 0.3em; padding: 0.15em 0.5em; border: 1px solid var(--line); border-radius: 1em; background: var(--panel-2); font-size: 0.9em; }
+.chooser .chip-x { background: none; border: 0; color: var(--dim); cursor: pointer; padding: 0 0.2em; }
+.chooser-panel { border: 1px solid var(--line); border-radius: 0.5em; padding: 0.5em; background: var(--bg); }
+.chooser-panel .crumbs { margin-bottom: 0.4em; font-size: 0.9em; }
+.chooser-panel .link { background: none; border: 0; color: var(--accent); cursor: pointer; padding: 0; font: inherit; text-align: left; }
+.chooser-rows { max-height: 16em; overflow: auto; display: grid; gap: 0.15em; }
+.chooser-row { display: flex; justify-content: space-between; align-items: center; gap: 0.5em; padding: 0.15em 0.2em; border-bottom: 1px solid var(--line); }
+.chooser-row .btn { flex: none; }

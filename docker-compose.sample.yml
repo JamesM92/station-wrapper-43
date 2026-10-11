@@ -1,0 +1,77 @@
+# A SAMPLE compose file: one container, local-disk config and catalog, and only some folders
+# of the media share mounted (read-only). Copy it, change the paths marked CHANGE, and
+# run `docker compose up -d`. The default docker-compose.yml does the same through .env.
+#
+#   /srv/fs42/config    LOCAL disk: stations, the schedule database (sqlite), the dashboard's settings
+#   /srv/fs42/catalog   LOCAL disk: folders of symlinks (never an SMB/NFS share)
+#   /mnt/media/...      your videos, which may be on a NAS; mounted read-only, never changed
+#
+# The volumes come in three groups; the `volumes:` block at the bottom explains each:
+#   1. the container's own data   config, catalog          LOCAL disk only
+#   2. cosmetic extras            guide-music, channel-logos   optional; local disk or a NAS
+#   3. your media                 youtube, movies, tvseries    read-only; local disk or a NAS
+# Guide music and channel logos are ordinary folders under /mnt/media: pick them in the
+# dashboard once they are mounted.
+name: fs42
+
+services:
+  station-wrapper-43:
+    image: ghcr.io/jamesm92/station-wrapper-43:dev     # CHANGE to a version tag for a stable install
+    container_name: fs42
+    restart: unless-stopped
+    ports:
+      - "4242:4242"      # FieldStation42's console (no login: keep it on your own network)
+      - "5004:5004"      # the dashboard, the player, and the HDHomeRun / guide endpoints for Jellyfin
+    tmpfs:
+      - /cache:size=6g,mode=1777        # read-ahead: the next break or episode is copied to RAM
+    volumes:
+      # 1. the container's own data (LOCAL disk)
+      - config:/config
+      - catalog:/app/catalog
+      # 2. cosmetic extras (optional; local or NAS)
+      - guide-music:/mnt/media/guide-music:ro
+      - channel-logos:/mnt/media/channel-logos:ro
+      # 3. your media (read-only; local or NAS)
+      - youtube:/mnt/media/youtube:ro
+      - movies:/mnt/media/movies:ro
+      - tvseries:/mnt/media/tvseries:ro
+    environment:
+      TZ: America/Toronto                # CHANGE: the guide and the schedule use this clock
+      SYNC_ENABLED: "1"                  # keeps the symlink pool current (add-only)
+      SYNC_INTERVAL_MINUTES: "60"
+      SYNC_FULL_EVERY_HOURS: "24"
+      PREFETCH_MAX_MB: "5400"            # at most this much of the /cache RAM disk
+      # DASHBOARD_PASSWORD: ""           # or set it on the first visit; the management pages are behind a login
+
+volumes:
+  # ---- 1. THE CONTAINER'S OWN DATA: LOCAL DISK ONLY, never a NAS or SMB/NFS share ----------------
+  # config:  FieldStation42's schedule database (sqlite, which misbehaves over a network share),
+  #          the station configs, and the dashboard's settings.
+  config:
+    driver_opts: { type: none, o: bind, device: /srv/fs42/config }          # CHANGE
+  # catalog: folders of symlinks into your media (the symlink pool, tag folders, lists). A share
+  #          refuses or breaks symlinks, so the container will not start with this on SMB.
+  catalog:
+    driver_opts: { type: none, o: bind, device: /srv/fs42/catalog }         # CHANGE
+
+  # ---- 2. COSMETIC EXTRAS: optional, may be on a NAS or on local disk ----------------------------
+  # guide-music:   music for the Channel Guide channel.
+  # channel-logos: pictures used as channel logos in the guide and in Jellyfin.
+  # Leave both out (and their lines above) if you do not use them.
+  guide-music:
+    driver_opts: { type: none, o: bind, device: /mnt/media/guide-music }    # CHANGE
+  channel-logos:
+    driver_opts: { type: none, o: bind, device: /mnt/media/channel-logos }  # CHANGE
+
+  # ---- 3. YOUR MEDIA: one volume per folder, read-only, may be on a NAS or on local disk --------
+  # The videos are only read, through links that sit on the local catalog. The folder names
+  # inside the container (/mnt/media/<name>) are what the dashboard shows.
+  # youtube: a TubeArchivist library. The TubeArchivist import (Lists & files) reads the metadata
+  #          TubeArchivist embeds in its videos; videos without it are listed by plain folder
+  #          and file name like any other folder.
+  youtube:
+    driver_opts: { type: none, o: bind, device: /mnt/media/youtube }        # CHANGE
+  movies:
+    driver_opts: { type: none, o: bind, device: /mnt/media/movies }         # CHANGE
+  tvseries:
+    driver_opts: { type: none, o: bind, device: /mnt/media/tvseries }       # CHANGE

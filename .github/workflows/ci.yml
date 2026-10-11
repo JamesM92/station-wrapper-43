@@ -1,0 +1,58 @@
+name: ci
+
+# Fast feedback on every dev/main push and on PRs to main.
+# REQUIRES: a runner labeled `ubuntu-latest` (GitHub-hosted is fine). The image is built
+# and smoke-tested by dev-image.yml, not here; scripts/preflight.sh does the
+# same locally before a push.
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  checks:
+    name: Lint and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Syntax checks
+        run: |
+          python3 -m py_compile fs42-tuner/*.py scripts/*.py fs42-sync/*.py supervisor/*.py ta-nfo/*.py
+          bash -n scripts/sync-fs42.sh setup-dirs.sh fieldstation42/entrypoint.sh
+          sh -n farm/run.sh fieldstation42/fs42-channels
+          python3 -c "import json; json.load(open('fs42-tuner/config.default.json')); json.load(open('fs42-tuner/config.example.json'))"
+
+      - name: Ensure ffmpeg (the tuner tests start real encoders)
+        run: |
+          command -v ffmpeg >/dev/null || { apt-get update && apt-get install -y ffmpeg; } \
+            || { sudo apt-get update && sudo apt-get install -y ffmpeg; }
+
+      - name: Tuner tests
+        working-directory: fs42-tuner
+        run: |
+          set -e
+          pip install pillow defusedxml
+          for t in test_*.py; do echo "== $t"; python3 "$t"; done
+
+      - name: Channel generator tests
+        run: |
+          pip install defusedxml jsonschema
+          python3 scripts/test_build_channels.py
+          python3 scripts/test_init.py
+          python3 scripts/test_compose.py
+          python3 scripts/test_fs42_link.py
+          python3 scripts/test_firstrun.py
+          python3 scripts/test_pack_short.py
+          python3 scripts/test_setup_dirs.py
+          (cd fs42-sync && python3 test_sync.py)
+          (cd supervisor && python3 test_supervisor.py)
+          (cd ta-nfo && python3 test_service.py)
+
+      - name: FieldStation42 schema contract
+        run: python3 scripts/check-fs42-contract.py fieldstation42/src

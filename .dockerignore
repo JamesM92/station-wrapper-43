@@ -1,0 +1,16 @@
+.git
+.env
+**/__pycache__
+**/*.pyc
+fs42-tuner.tar.gz
+*.db
+*.log
+# the tests and docs are not part of the image
+scripts/*
+!scripts/init.py
+!scripts/build_channels.py
+!scripts/fs42_link.py
+!scripts/firstrun.py
+!scripts/update_catalog.py
+**/test_*.py
+*.md

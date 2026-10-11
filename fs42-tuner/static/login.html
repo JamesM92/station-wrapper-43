@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Station Wrapper 43 -- Log in</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/dashboard.css">
+<link rel="stylesheet" href="/files.css">
+<link rel="stylesheet" href="/views.css">
+</head>
+<body>
+  <main id="dash" class="login">
+    <div class="view-head"><h1 id="title">Station Wrapper 43</h1></div>
+    <p id="msg" class="msg" role="status" aria-live="polite"></p>
+
+    <form id="login-form" class="panel" hidden>
+      <h2>Log in</h2>
+      <div class="field"><label for="l-pw">Password</label><input id="l-pw" type="password" autocomplete="current-password"></div>
+      <div class="form-actions"><button type="submit" class="btn primary">Log in</button></div>
+    </form>
+
+    <form id="setup-form" class="panel" hidden>
+      <h2>Set a password</h2>
+      <p class="dim">This dashboard can change your stations, lists and schedules, so it asks for a password. Whoever opens this page first sets it, so do it now. (To set it without this page, give the container <code>DASHBOARD_PASSWORD</code>.)</p>
+      <div class="field"><label for="s-pw">New password (at least 8 characters)</label><input id="s-pw" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="s-pw2">Again</label><input id="s-pw2" type="password" autocomplete="new-password"></div>
+      <div class="form-actions"><button type="submit" class="btn primary">Set the password and log in</button></div>
+    </form>
+
+    <form id="change-form" class="panel" hidden>
+      <h2>Change the password</h2>
+      <p class="dim">Changing it logs everyone out, including you here, which is why you will be asked to log in again.</p>
+      <div class="field"><label for="c-old">Current password</label><input id="c-old" type="password" autocomplete="current-password"></div>
+      <div class="field"><label for="c-new">New password (at least 8 characters)</label><input id="c-new" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="c-new2">Again</label><input id="c-new2" type="password" autocomplete="new-password"></div>
+      <div class="form-actions"><button type="submit" class="btn primary">Change it</button><a class="btn" href="/">Cancel</a></div>
+    </form>
+
+    <p id="off" class="dim" hidden>The login is switched off on this server (<code>DASHBOARD_LOGIN=0</code>). <a href="/">Go to the dashboard</a>.</p>
+  </main>
+  <script src="/login.js"></script>
+</body>
+</html>

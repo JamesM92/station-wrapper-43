@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Station Wrapper 43 -- Channels</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/dashboard.css">
+<link rel="stylesheet" href="/views.css">
+</head>
+<body>
+  <main id="dash">
+    <header class="dash-head">
+      <h1>Channels</h1>
+    </header>
+
+    <section id="setup" class="panel setup" hidden aria-label="Getting started"></section>
+    <section id="stats" class="stats" aria-label="System"></section>
+    <section id="channels" class="channels" aria-label="Channels"></section>
+
+    <section class="library" aria-label="Library">
+      <div class="lib-head">
+        <h2>Library</h2>
+        <span id="lib-summary" class="lib-summary"></span>
+        <button id="lib-rescan" class="lib-rescan" type="button">Rescan</button>
+      </div>
+      <div id="library" class="lib-tags"></div>
+    </section>
+    <p id="status-line" class="status-line"></p>
+  </main>
+
+  <script src="/common.js"></script>
+  <script>W.nav("dashboard");</script>
+  <script src="/dashboard.js"></script>
+</body>
+</html>

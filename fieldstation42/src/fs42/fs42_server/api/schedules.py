@@ -1,0 +1,166 @@
+from fastapi import APIRouter, HTTPException, status
+from datetime import datetime
+from fs42.station_manager import StationManager
+from fs42.liquid_api import LiquidAPI
+from fs42.metadata_io import MetadataIO
+
+router = APIRouter(prefix="/schedules", tags=["schedules"])
+
+
+def _attach_meta(blocks):
+    """Attach cached NFO/tag metadata to each single-content block in place.
+
+    Multi-content blocks (clip shows, loops) and off-air blocks have no single
+    feature to describe, so they are left without a `meta` field and consumers
+    fall back to the block title.
+    """
+    if not blocks:
+        return blocks
+    for block in blocks:
+        content = getattr(block, "content", None)
+        if content is None or isinstance(content, list):
+            continue
+        path = getattr(content, "path", None)
+        if not path:
+            continue
+        meta = MetadataIO.read(path)
+        if meta:
+            block.meta = meta
+    return blocks
+
+@router.get("/search_all")
+async def search_all_schedules(query: str = None):
+    if not query:
+        # If no query, get all blocks from all stations
+        station_manager = StationManager()
+        all_results = []
+        
+        for station in station_manager.stations:
+            if station.get("_has_schedule", False):
+                try:
+                    schedule_blocks = LiquidAPI.get_blocks(station)
+                    if schedule_blocks:
+                        all_results.append({
+                            "network_name": station["network_name"],
+                            "schedule_blocks": schedule_blocks
+                        })
+                except Exception as e:
+                    all_results.append({
+                        "network_name": station["network_name"],
+                        "error": str(e),
+                        "schedule_blocks": []
+                    })
+        
+        return {"query": query, "results": all_results}
+    else:
+        # Search across all stations at once
+        try:
+            search_results = LiquidAPI.search_all_blocks(query)
+            all_results = []
+            
+            for station_name, blocks in search_results.items():
+                if blocks:
+                    all_results.append({
+                        "network_name": station_name,
+                        "schedule_blocks": blocks
+                    })
+            
+            return {"query": query, "results": all_results}
+        except Exception as e:
+            return {"query": query, "error": str(e), "results": []}
+
+@router.get("/search/{network_name}")
+async def search_schedule(network_name: str, query: str = None):
+    conf = StationManager().station_by_name(network_name)
+    if conf is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Station '{network_name}' not found")
+    if query:
+        schedule_blocks = LiquidAPI.search_blocks(conf, query)
+    else:
+        schedule_blocks = LiquidAPI.get_blocks(conf)
+
+    return {"network_name": network_name, "query": query, "schedule_blocks": schedule_blocks}
+
+def _attach_meta_batch(by_station):
+    """Attach metadata to every block across every station on one connection."""
+    def single_content_path(block):
+        content = getattr(block, "content", None)
+        if content is None or isinstance(content, list):
+            return None
+        return getattr(content, "path", None)
+
+    paths = []
+    for blocks in by_station.values():
+        for block in blocks:
+            path = single_content_path(block)
+            if path:
+                paths.append(path)
+
+    if not paths:
+        return
+
+    metas = MetadataIO.read_many(paths)
+    for blocks in by_station.values():
+        for block in blocks:
+            path = single_content_path(block)
+            if path and path in metas:
+                block.meta = metas[path]
+
+
+def _listing_projection(blocks, include_meta):
+    # only get the stuff we need
+    listings = []
+    for block in blocks:
+        meta = getattr(block, "meta", None)
+        listing = {
+            "title": MetadataIO.pick_title(meta) or block.title,
+            "start_time": block.start_time.isoformat(),
+            "end_time": block.end_time.isoformat(),
+        }
+        if include_meta and meta:
+            listing["meta"] = meta
+        listings.append(listing)
+    return listings
+
+
+# NOTE: must stay above /{network_name}, or that route captures "all".
+@router.get("/all")
+def get_all_schedules(start: str = None, end: str = None, include_meta: bool = False):
+
+    if not start or not end:
+        return {"error": "start and end are both required."}
+
+    try:
+        sdt = datetime.fromisoformat(start)
+        edt = datetime.fromisoformat(end)
+    except ValueError:
+        return {"error": "Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SS) for start and end."}
+
+    by_station = LiquidAPI.get_all_blocks(sdt, edt)
+
+    # Always attach metadata: even when include_meta is off, the listing
+    # title still prefers metadata over the filename-parsed title.
+    _attach_meta_batch(by_station)
+
+    schedules = {name: _listing_projection(blocks, include_meta) for name, blocks in by_station.items()}
+    return {"start": start, "end": end, "schedules": schedules}
+
+
+@router.get("/{network_name}")
+async def get_schedule(network_name: str, start: str = None, end: str = None, include_meta: bool = False):
+    conf = StationManager().station_by_name(network_name)
+    if conf is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Station '{network_name}' not found")
+    sdt = None
+    edt = None
+    if start and end:
+        try:
+            sdt = datetime.fromisoformat(start)
+            edt = datetime.fromisoformat(end)
+        except ValueError:
+            return {"error": "Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SS) for start and end."}
+
+    schedule_blocks = LiquidAPI.get_blocks(conf, sdt, edt)
+    if include_meta:
+        _attach_meta(schedule_blocks)
+    return {"network_name": network_name, "schedule_blocks": schedule_blocks}

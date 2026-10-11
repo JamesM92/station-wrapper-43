@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Station Wrapper 43 -- Status</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/dashboard.css">
+<link rel="stylesheet" href="/views.css">
+<link rel="stylesheet" href="/iptv.css">
+</head>
+<body>
+  <main id="dash">
+    <div class="view-head">
+      <h1>Status</h1>
+      <span>
+        <button type="button" class="btn" id="speed">Test media speed</button>
+        <a class="btn" href="/api/system/diagnostics" download>Download diagnostics</a>
+      </span>
+    </div>
+    <p class="dim">What is wrong, what to look at, and what is fine. The diagnostics file holds all of this plus the last messages the container printed, with passwords left out: send it when asking for help.</p>
+    <p id="msg" class="msg" role="status" aria-live="polite"></p>
+    <section id="checks" class="panel" aria-label="Checks"></section>
+    <section id="stations" class="panel" aria-label="Stations"></section>
+    <section id="system" class="panel" aria-label="System"></section>
+    <section id="recent" class="panel" aria-label="Recent problems"></section>
+  </main>
+  <script src="/common.js"></script>
+  <script src="/status.js"></script>
+</body>
+</html>

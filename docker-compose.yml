@@ -1,0 +1,167 @@
+# ============================================================================
+#  ONE image, ONE container, THREE volumes.
+#
+#  The container runs FieldStation42's console and scheduler, the dashboard and
+#  player, and (switched on with SYNC_ENABLED) the symlink-pool scanner
+#  and the TubeArchivist view builder. A small supervisor inside keeps them running.
+#
+#  CONFIG   (volume `config`, FS42_CONFIG_ROOT)   LOCAL DISK, not a network share.
+#      runtime/    FieldStation42's schedule database and sockets (sqlite: it
+#                  misbehaves over SMB/NFS)
+#      confs/      station configs
+#      tuner/      the dashboard's config.json (created on first start)
+#      groups.toml your channel-building settings, if you use it
+#
+#  CATALOG  (volume `catalog`, FS42_CATALOG_ROOT)  NOT an SMB/CIFS share. LOCAL DISK.
+#      by-genre/     the tag folders FieldStation42 schedules from
+#      tanfo/        the TubeArchivist view (switched on in the dashboard)
+#      media-links/  a symlink for every video on your media (SYNC_ENABLED)
+#    All of it is SYMLINKS into your media. SMB shares refuse to create symlinks, or
+#    follow an absolute link on the server instead of in the container, so on a share
+#    every link is missing or dead. The container refuses to start if the catalog is on
+#    SMB or can't hold a working symlink (override only for a share you have tested:
+#    FS42_ALLOW_NETWORK_CATALOG=1).
+#
+#  MEDIA    (volume `media`, FS42_MEDIA_ROOT)    Your NAS / SMB shares are fine.
+#    Mounted read-only at /mnt/media. By default the WHOLE of FS42_MEDIA_ROOT is
+#    shared in. If shares are mounted inside it on the host (/mnt/media/tv from one
+#    NAS, /mnt/media/movies from another) they appear too, because the volume is a
+#    recursive bind ("rbind"); a plain bind would leave them out.
+#    To share in only SOME folders instead (say /mnt/media/youtube, /mnt/media/anime,
+#    /mnt/media/movies), use one volume per folder: see "ONLY SOME FOLDERS" below.
+#    Videos are only read, through links that sit on local disk.
+#
+#  In short: CONFIG and CATALOG are the container's own data and must be LOCAL disk; MEDIA (and any
+#  optional guide-music or channel-logos folders you share in) is read-only and may be on a NAS or local.
+#  docker-compose.sample.yml shows the same layout with one volume per media folder.
+#
+#  FS42_LOCAL_ROOT is REQUIRED: the one local folder that holds config/ and catalog/.
+#  A missing one stops `docker compose` with a message instead of quietly becoming an
+#  empty path. (It was called FS42_SSD_ROOT; rename it in .env, and run
+#  ./setup-dirs.sh --migrate to move an existing install.)
+# ============================================================================
+name: station-wrapper-43
+
+services:
+  station-wrapper-43:
+    image: ghcr.io/jamesm92/station-wrapper-43:${FS42_TAG:-dev}
+    # `docker compose build` or `up --build` builds this folder instead of pulling.
+    build: .
+    container_name: station-wrapper-43
+    volumes:
+      - config:/config
+      - catalog:/app/catalog
+      - media:/mnt/media:ro
+      # ONLY SOME FOLDERS: delete the media line above and the media volume below, then
+      # add one line like this per folder, and one matching volume (copy media; set its
+      # `o` to `bind` and its `device` to the folder). The folder name must match the host's.
+      #   - youtube:/mnt/media/youtube:ro
+      #   - anime:/mnt/media/anime:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "4242:4242"     # FieldStation42's console: build stations, catalogs, schedules
+      - "5004:5004"     # the dashboard and player: what's on, watch a channel
+    environment:
+      # Leave unset. Only for a config or catalog on a share where you have tested it.
+      FS42_ALLOW_NETWORK_CATALOG: ${FS42_ALLOW_NETWORK_CATALOG:-}
+      # OPTIONAL: keep the symlink pool (catalog/media-links) current, and watch the tag folders.
+      #  - every SYNC_INTERVAL_MINUTES it adds a symlink for each new video on the media
+      #    (add-only; it never removes or rewrites a link),
+      #  - it notices tag folders that changed since their catalog was last updated, and once a day
+      #    (in the SYNC_REBUILD_HOUR window) updates those stations' catalogs with the new videos.
+      #    The schedule is NOT touched: the new videos are used the next time days are added.
+      #    On by default; SYNC_REBUILD=0 only reports.
+      SYNC_ENABLED: ${SYNC_ENABLED:-}
+      # ON by default: keeps catalog/by-genre filled with tag folders of links, so FieldStation42's
+      # console has something to build stations from. Genres come from the NFO files, each
+      # TubeArchivist channel gets a folder of its own, shows with no genre go under Unclassified.
+      # Add-only. It does not create stations or schedules: do that in the console (:4242).
+      # FARM_ENABLED=0 turns it off.
+      FARM_ENABLED: ${FARM_ENABLED:-1}
+      # ON by default: a brand new install gets a test station (channel 0, a test card) so something is on air
+      # at once. It runs once, never touches an install that already has stations, and you can delete it in the
+      # console. 0 turns it off.
+      FIRSTRUN_TEST_STATION: ${FIRSTRUN_TEST_STATION:-1}
+      FIRSTRUN_GUIDE_STATION: ${FIRSTRUN_GUIDE_STATION:-1}
+      # The schedule keeper (ON by default) tops every station that has a schedule up to a number of days ahead,
+      # because FieldStation42 only does that inside its on-screen player, which this container never runs.
+      # You normally change it on the Stations page; these are only its STARTING values (a choice saved
+      # there wins).
+      SCHEDULE_KEEPER: ${SCHEDULE_KEEPER:-}
+      KEEPER_DAYS_AHEAD: ${KEEPER_DAYS_AHEAD:-}
+      KEEPER_INTERVAL_MINUTES: ${KEEPER_INTERVAL_MINUTES:-30}
+      FIRSTRUN_CLIP_SECONDS: ${FIRSTRUN_CLIP_SECONDS:-60}
+      # The dashboard's management pages (Stations, Schedule, Files and the YouTube panel) are behind a LOGIN, ON by
+      # default: the first visit asks you to set a password. DASHBOARD_PASSWORD sets it without that page (only if
+      # none is set yet); DASHBOARD_LOGIN=0 switches the login off (for a login of your own in front). The player and
+      # the HDHomeRun / guide endpoints other clients use stay open. FieldStation42's own console on :4242 is NOT
+      # covered: keep that port off the internet.
+      DASHBOARD_LOGIN: ${DASHBOARD_LOGIN:-1}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-}
+      # DASHBOARD_EDIT=0 makes the management pages look-only, even when logged in.
+      DASHBOARD_EDIT: ${DASHBOARD_EDIT:-1}
+      FARM_INTERVAL_MINUTES: ${FARM_INTERVAL_MINUTES:-30}
+      SYNC_INTERVAL_MINUTES: ${SYNC_INTERVAL_MINUTES:-60}
+      SYNC_FULL_EVERY_HOURS: ${SYNC_FULL_EVERY_HOURS:-24}
+      SYNC_INCLUDE: ${SYNC_INCLUDE:-}
+      SYNC_EXCLUDE: ${SYNC_EXCLUDE:-}
+      SYNC_PRUNE: ${SYNC_PRUNE:-}
+      SYNC_REBUILD: ${SYNC_REBUILD:-}
+      SYNC_REBUILD_HOUR: ${SYNC_REBUILD_HOUR:-4}
+      SYNC_REBUILD_WINDOW_HOURS: ${SYNC_REBUILD_WINDOW_HOURS:-2}
+      # Read-ahead (see the tmpfs line above). On by default; it needs the /cache RAM disk or it stays off and says why.
+      PREFETCH: ${PREFETCH:-1}
+      PREFETCH_RAM: ${PREFETCH_RAM:-1}
+      PREFETCH_DIR: ${PREFETCH_DIR:-/cache}
+      PREFETCH_MAX_MB: ${PREFETCH_MAX_MB:-5400}
+      # The TubeArchivist conversion (TA_NFOWriter builds a readable "view" of symlinks in the catalog
+      # volume) is switched on from the dashboard: http://<host>:5004/files.html, "YouTube (TubeArchivist)".
+      # You pick the folder there; nothing here is needed. These three are only STARTING VALUES for the
+      # same settings (a choice saved in the dashboard wins), kept so an older setup keeps working.
+      TA_ENABLED: ${TA_ENABLED:-}
+      TA_LIBRARY: ${TA_LIBRARY:-/mnt/media/tubearchivist}
+      TA_INTERVAL_MINUTES: ${TA_INTERVAL_MINUTES:-1440}
+    labels:
+      fs42.requires: "config and catalog on LOCAL disk, not an SMB share (FS42_LOCAL_ROOT)"
+    restart: unless-stopped
+    # The read-ahead cache (PREFETCH): the next break or episode is copied into RAM before it is due, so a slow network
+    # share doesn't make a viewer wait. This is that RAM: nothing is written to a drive. It counts against the memory
+    # you give Docker (and its VM); lower the size if that is tight. To use a folder on disk instead, remove this and set
+    # PREFETCH_RAM=0 and PREFETCH_DIR to the folder; to turn the read-ahead off, set PREFETCH=0.
+    tmpfs:
+      - /cache:size=${PREFETCH_CACHE_SIZE:-6g},mode=1777
+    # Docker keeps a container's log forever by default and a chatty one can fill the disk: keep the last 60 MB.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+volumes:
+  # CONFIG: LOCAL disk. Holds the sqlite schedule database, so never a network share.
+  # Defaults to $FS42_LOCAL_ROOT/config; FS42_CONFIG_ROOT moves it to another LOCAL path.
+  config:
+    driver_opts:
+      type: none
+      o: bind
+      device: "${FS42_CONFIG_ROOT:-${FS42_LOCAL_ROOT:?set FS42_LOCAL_ROOT in .env. (FS42_SSD_ROOT was its old name: rename it.) It must be a LOCAL disk path, not an SMB share}/config}"
+
+  # CATALOG: MUST NOT be an SMB/CIFS share. Local disk. See the header.
+  # It is a folder of symlinks into your media. Reading a video through a link
+  # that sits on local disk is ordinary file access, so only the MEDIA needs to
+  # be on the share. Defaults to $FS42_LOCAL_ROOT/catalog; FS42_CATALOG_ROOT moves it
+  # to another LOCAL path.
+  catalog:
+    driver_opts:
+      type: none
+      o: bind
+      device: "${FS42_CATALOG_ROOT:-${FS42_LOCAL_ROOT}/catalog}"
+
+  # MEDIA: the one thing that belongs on the NAS. Read-only in the container.
+  # "rbind" (a recursive bind) is what makes shares mounted INSIDE this folder show up; a
+  # plain "bind" would leave them out. The container's read-only setting covers them too.
+  media:
+    driver_opts:
+      type: none
+      o: rbind
+      device: ${FS42_MEDIA_ROOT}

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Station Wrapper 43 -- Files</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/dashboard.css">
+<link rel="stylesheet" href="/files.css">
+<link rel="stylesheet" href="/views.css">
+</head>
+<body>
+  <main id="dash">
+    <header class="dash-head">
+      <h1>Lists &amp; files</h1>
+    </header>
+
+    <p class="files-intro">
+      Build the lists a station plays from. Pick videos or whole folders on the left and add them to a list on
+      the right. <strong>Nothing is copied</strong>: a list holds links, so a video can be in as many lists as you
+      like and your media is never touched.
+    </p>
+    <p id="msg" class="files-msg" role="status" aria-live="polite"></p>
+
+    <details class="ta-card" id="ta-details" aria-label="YouTube">
+      <summary class="pane-head">
+        <h2>YouTube (TubeArchivist)</h2>
+        <span id="ta-summary" class="ta-summary dim"></span>
+      </summary>
+      <div class="pane-head">
+        <label class="switch"><input type="checkbox" id="ta-enabled"> Convert my TubeArchivist library</label>
+      </div>
+      <p class="ta-help">
+        TubeArchivist stores videos in folders named <code>UC…</code> with no readable titles. Switch this on and the
+        wrapper builds a readable version as links (a folder per channel, with seasons and episode names) that shows
+        up in <strong>Media</strong> as a folder named after yours with <code>-nfo</code> added (<code>youtube</code> becomes
+        <code>youtube-nfo</code>), and your original folder is hidden there. Add more than one library if you have them.
+        Your TubeArchivist files are only read, never changed.
+      </p>
+      <div class="ta-row">
+        <label>Check for new videos
+          <select id="ta-interval" aria-label="How often">
+            <option value="15">every 15 minutes</option>
+            <option value="60">every hour</option>
+            <option value="360">every 6 hours</option>
+            <option value="720">every 12 hours</option>
+            <option value="1440">once a day</option>
+            <option value="10080">once a week</option>
+          </select>
+        </label>
+        <button id="ta-save" type="button" class="btn primary">Save</button>
+        <button id="ta-run" type="button" class="btn">Convert now</button>
+      </div>
+      <ul id="ta-libs" class="ta-libs" aria-label="Library folders"></ul>
+      <div class="ta-row">
+        <label>Add a library folder
+          <select id="ta-add" aria-label="Library folder to add"></select>
+        </label>
+        <input id="ta-add-other" type="text" placeholder="/mnt/media/…" hidden aria-label="Library folder path">
+        <button id="ta-add-btn" type="button" class="btn">Add</button>
+      </div>
+      <p id="ta-status" class="ta-status" role="status" aria-live="polite"></p>
+    </details>
+
+    <details id="sources-card" class="panel" hidden>
+      <summary><strong>Sources made for stations</strong> <span id="sources-count" class="dim"></span></summary>
+      <p class="dim">A series, a season, a video, a playlist, or several of them together that a slot, a mid card or a commercial block uses. One that no station uses any more can be removed here (your media is never touched).</p>
+      <div id="sources-list"></div>
+    </details>
+
+    <div class="files-cols">
+      <section class="files-pane" aria-label="Your media">
+        <div class="pane-head">
+          <h2>Your media</h2>
+        </div>
+        <nav id="src-crumbs" class="crumbs" aria-label="Folder"></nav>
+        <div class="pane-actions">
+          <button id="src-all" type="button" class="btn">Select all</button>
+          <button id="src-none" type="button" class="btn">Clear</button>
+          <button id="add-btn" type="button" class="btn primary" disabled>Add to a list</button>
+          <label class="check" title="A folder you add stays linked: new videos that appear in it later are added to the list on their own (checked about every 30 minutes)."><input type="checkbox" id="follow-on" checked> Keep folders up to date</label>
+        </div>
+        <div id="src-kinds" class="pane-actions" hidden aria-label="Kinds of video in this channel"></div>
+        <ul id="src-list" class="files-list"></ul>
+      </section>
+
+      <section class="files-pane" aria-label="Lists">
+        <div class="pane-head">
+          <h2>Lists</h2>
+          <form id="new-form" class="inline-form">
+            <input id="new-name" type="text" placeholder="New list name" maxlength="100" aria-label="New list name">
+            <button type="submit" class="btn primary">Create</button>
+          </form>
+        </div>
+        <ul id="tag-list" class="tag-list"></ul>
+        <div id="tag-view" hidden>
+          <nav id="tag-crumbs" class="crumbs" aria-label="Inside the list"></nav>
+          <div class="pane-actions">
+            <button id="tag-all" type="button" class="btn">Select all</button>
+            <button id="tag-none" type="button" class="btn">Clear</button>
+            <button id="remove-btn" type="button" class="btn danger" disabled>Remove from list</button>
+            <button id="rename-btn" type="button" class="btn">Rename list</button>
+            <button id="delete-btn" type="button" class="btn danger">Delete list</button>
+          </div>
+          <div class="pane-actions" id="ref-row">
+            <label class="ref-label">Put another list inside this one
+              <select id="ref-list" aria-label="List to put inside this one"></select>
+            </label>
+            <button id="ref-btn" type="button" class="btn">Add list</button>
+          </div>
+          <div id="follows" hidden>
+            <h3>Kept up to date</h3>
+            <p class="ta-help">New videos in these folders are added to this list on their own. Take a video out of the list and it stays out.</p>
+            <ul id="follow-list" class="files-list"></ul>
+          </div>
+          <ul id="tag-contents" class="files-list"></ul>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script src="/common.js"></script>
+  <script>W.nav("files");</script>
+  <script src="/files.js"></script>
+</body>
+</html>
