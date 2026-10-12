@@ -11,7 +11,9 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
   20 seconds. The TV guide channel shows its own guide, drawn here and refreshed every 10 seconds, without an encoder running.
   A channel that is off air, has nothing scheduled, has a file that is gone, or fell back to the test pattern shows the test
   pattern with its reason in the corner (*NO PROGRAMMING*, *NO FILE: name*, *BAD FILE*, *NO VIDEOS IN: list*...).
-- **An external source's channel says "external"** on the dashboard instead of "idle": nothing here watches or acts on those streams.
+- **An external source's channels on the dashboard follow how they are played.** A converted one is treated like a station of our own:
+  *idle* until somebody watches it, then *live stream*. One passed on as it is says *passing on*, since nothing here watches it. A
+  guide-only tuner has no channels of ours, so it has no tiles.
 - **No flicker when the dashboard updates.** A picture stays on screen until its replacement has loaded (the guide channel's
   picture used to blank for a moment each time it was drawn again).
 - **The dashboard is lighter.** The Library section (the lists, tag by tag) is gone from the dashboard. The counts, the dead-link and

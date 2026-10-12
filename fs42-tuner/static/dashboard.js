@@ -100,14 +100,14 @@
         thumb = `<div class="thumb-pattern"><span>${esc(r.pattern)}</span></div>`;
       } else if (now && now.content_type === "guide") {
         thumb = `<img class="thumb-img" alt="" data-ch="${n}" src="/thumb/${n}.jpg?b=${Math.floor(Date.now() / GUIDE_BUCKET_MS)}">`;
-      } else if (r.external) {
-        thumb = '<div class="thumb-off">external</div>';        // nothing here watches or acts on an external source
+      } else if (r.external && r.external.mode === "relay") {
+        thumb = '<div class="thumb-off">passing on</div>';       // copied untouched: nothing here watches or acts on it
       } else if (!r.viewers) {
-        thumb = '<div class="thumb-off">idle</div>';
+        thumb = '<div class="thumb-off">idle</div>';             // our own channels and converted sources alike
       } else if (now && !now.is_stream) {
         thumb = `<img class="thumb-img" alt="" data-ch="${n}" src="/thumb/${n}.jpg?b=${bucket}">`;
       } else {
-        thumb = '<div class="thumb-off">live stream</div>';
+        thumb = '<div class="thumb-off">\u25B6 live stream</div>';  // a converted stream being watched: no snapshot is made of it
       }
       const pct = now && now.duration ? Math.min(100, (now.elapsed / now.duration) * 100) : 0;
       const badges = [
