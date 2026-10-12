@@ -292,7 +292,21 @@ def main():
         b.js("[...document.querySelectorAll('#tag-list li')].find(l => l.textContent.includes('Superman'))?.click()")
         time.sleep(0.8)
         b.clip(".files-cols", os.path.join(shots, "files.png"))
-        page("schedule.html", "schedule.png", 4)
+        # the schedule of the cartoon channel with a block opened that has commercials and mid cards in it
+        b.go(f"{base}/schedule.html", 3)
+        b.js("(() => { const sel = document.getElementById('station'); const o = [...sel.options].find(x => x.textContent.includes('Saturday')); "
+             "if (o) { sel.value = o.value; sel.dispatchEvent(new Event('change')); } })()")
+        time.sleep(2.5)
+        for _ in range(2):                                    # the container's clock may be a day ahead of this browser's
+            if b.js("document.body.innerText.includes('Nothing is scheduled on this day')"):
+                b.js("document.getElementById('next').click()")
+                time.sleep(2)
+        for i in range(8):                                    # open blocks until one shows a break (commercials and mid cards)
+            b.js(f"document.querySelectorAll('.twisty')[{i}] && document.querySelectorAll('.twisty')[{i}].click()")
+            time.sleep(1.5)
+            if b.js("document.body.innerText.includes('commercial') && document.body.innerText.includes('mid card')"):
+                break
+        b.shot(os.path.join(shots, "schedule.png"), full=False)           # the top of the day: the opened block and a few after it
         b.go(f"{base}/iptv.html", 3)
         b.js("document.querySelectorAll('details').forEach(d => d.open = true)")
         b.js("(() => { const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); let n; "
