@@ -54,7 +54,7 @@
       if (i < 0) continue;
       const m = lines[i].match(/([\d:.,]+)\s*-->\s*([\d:.,]+)/);
       if (!m) continue;
-      const body = lines.slice(i + 1).join("\n").replace(/<[^>]+>/g, "").replace(/\{\\[^}]*\}/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ").trim();
+      const body = lines.slice(i + 1).join("\n").replace(/<[^>]+>/g, "").replace(/\{\\[^}]*\}/g, "").replace(/&(amp|lt|gt|nbsp);/g, (m, e) => ({ amp: "&", lt: "<", gt: ">", nbsp: " " })[e]).trim();   // one pass: no entity is decoded twice
       if (body) cues.push({ from: secs(m[1]), to: secs(m[2]), text: body });
     }
     return cues.sort((a, b) => a.from - b.from);

@@ -3,10 +3,12 @@
   const $ = (id) => document.getElementById(id);
   const params = new URLSearchParams(location.search);
 
-  // only ever go back to a page on this server
+  // only ever go back to a page on this server: the address is resolved against this origin and used only when it stays on it
   function nextUrl() {
-    const n = params.get("next") || "/";
-    return /^\/(?![\/\\])[^\s]*$/.test(n) && !n.startsWith("/login") ? n : "/";
+    let u;
+    try { u = new URL(params.get("next") || "/", location.origin); } catch (e) { return "/"; }
+    if (u.origin !== location.origin || u.pathname.startsWith("/login")) return "/";
+    return u.pathname + u.search + u.hash;
   }
 
   function say(text, kind) {

@@ -219,6 +219,16 @@ def _wanted(name):
     return ext in VIDEO_EXT or ext in SIDECAR_EXT
 
 
+def _within(base, rel=""):
+    """`base` joined with an already cleaned relative path, normalised and checked to stay inside `base` (FileError when it
+    does not). The one place a path from a page becomes a path on disk."""
+    root = os.path.normpath(base)
+    full = os.path.normpath(os.path.join(root, rel)) if rel else root
+    if full != root and not full.startswith(root.rstrip(os.sep) + os.sep):
+        raise FileError("that path is not valid")
+    return full
+
+
 def _inside(path, base):
     base = os.path.realpath(base)
     path = os.path.realpath(path)
@@ -335,7 +345,7 @@ class Files:
         base, rel, _label = self._locate(root, rel)
         if not os.path.isdir(base):
             raise FileError("that place is not there (is it mounted?)", 404)
-        full = os.path.join(base, rel) if rel else base
+        full = _within(base, rel)
         if not os.path.isdir(full):
             raise FileError("that folder is not there", 404)
         if not _inside(full, base):
@@ -453,7 +463,7 @@ class Files:
         self._tag_dir(tag)
         if not inner:
             raise FileError("that is a whole list: use it as it is")
-        full = os.path.join(self.tags_root, rel)
+        full = _within(self.tags_root, rel)
         if not os.path.lexists(full):
             raise FileError("that is not in the list", 404)
         base = self._media_base()
@@ -495,7 +505,7 @@ class Files:
             raise FileError("choose a series")
         types = self._clean_types(types)
         base, inner, _label = self._locate("media", rel)
-        full = os.path.join(base, inner) if inner else base
+        full = _within(base, inner)
         playlist = (not os.path.lexists(full) and os.path.lexists(full + ".m3u8")
                     and os.path.basename(os.path.dirname(full)) == "Playlists")
         if not playlist and (not os.path.lexists(full) or not _inside(os.path.dirname(full) if os.path.isfile(full) else full, base)):
@@ -628,7 +638,7 @@ class Files:
     # ---- the lists
     def _tag_dir(self, name, must_exist=True):
         name = clean_tag(name)
-        path = os.path.join(self.tags_root, name)
+        path = _within(self.tags_root, name)
         if must_exist:
             if os.path.islink(path):
                 raise FileError(f"'{name}' is a link to a folder, not a list this can change")
@@ -723,7 +733,7 @@ class Files:
                 raise FileError("choose a whole list to put inside this one")
             self._tag_dir(rel)                         # it must be a list that exists (and not a link)
         base, rel, label = self._locate(root, rel)
-        full = os.path.join(base, rel) if rel else base
+        full = _within(base, rel)
         if (root != "tags" and not os.path.lexists(full) and os.path.lexists(full + ".m3u8")
                 and os.path.basename(os.path.dirname(full)) == "Playlists"
                 and os.path.dirname(os.path.dirname(os.path.dirname(full))) == self.roots["tanfo"]):
@@ -1078,7 +1088,7 @@ class Files:
             rel = clean_rel(rel)
             if not rel:
                 raise FileError("choose something inside the list")
-            full = os.path.join(tag_dir, rel)
+            full = _within(tag_dir, rel)
             if not os.path.lexists(full):
                 continue
             self._forget_removed(tag, rel)

@@ -90,7 +90,9 @@ def custom(media_root, rel):
     full = os.path.join(media_root, rel)
     real_root = os.path.realpath(media_root)
     real = os.path.realpath(full)
-    if not (real == real_root or real.startswith(real_root.rstrip(os.sep) + os.sep)) or not os.path.isfile(real):
+    if real != real_root and not real.startswith(real_root.rstrip(os.sep) + os.sep):
+        return None
+    if not os.path.isfile(real):
         return None
     try:
         if os.path.getsize(real) > MAX_BYTES:

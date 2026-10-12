@@ -1489,7 +1489,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "log in first", "login": "/login.html", "setup": not AUTH.has_password()}, 401)
         else:
             self.send_response(302)
-            self.send_header("Location", "/login.html?next=" + quote(path + (f"?{query}" if query else ""), safe=""))
+            where = "/login.html?next=" + quote(path + (f"?{query}" if query else ""), safe="")
+            if "\r" in where or "\n" in where:                           # quote() has made this impossible; a header is never built from a line break
+                where = "/login.html"
+            self.send_header("Location", where)
             self.send_header("Content-Length", "0")
             self.end_headers()
         return True
@@ -2017,9 +2020,12 @@ class Handler(BaseHTTPRequestHandler):
         if p.startswith("/art/"):                          # a video's picture, for the guide: only the picture beside a scheduled video
             from urllib.parse import unquote
             rel = unquote(p[len("/art/"):])
-            full = rel if os.path.isabs(rel) else os.path.join(CATALOG_ROOT, rel)
             real_root = os.path.realpath(CATALOG_ROOT)
-            if os.path.isabs(rel) or ".." in rel.split("/") or not os.path.realpath(os.path.dirname(full)).startswith(real_root):
+            if os.path.isabs(rel) or ".." in rel.split("/") or "\0" in rel:
+                return self.send_error(404)
+            full = os.path.normpath(os.path.join(real_root, rel))
+            folder = os.path.realpath(os.path.dirname(full))             # the file may be a link out to the media: its folder is the check
+            if folder != real_root and not folder.startswith(real_root.rstrip(os.sep) + os.sep):
                 return self.send_error(404)
             got = art.get(full)
             if not got or os.path.getsize(got[0]) > 4 * 1024 * 1024:
@@ -2130,8 +2136,11 @@ class Handler(BaseHTTPRequestHandler):
         with "../" -- so the caller's own 404 fires for those.
         """
         rel = "index.html" if path == "/" else path.lstrip("/")
-        full = os.path.normpath(os.path.join(STATIC_DIR, rel))
-        if os.path.commonpath([full, STATIC_DIR]) != STATIC_DIR or not os.path.isfile(full):
+        root = os.path.normpath(STATIC_DIR)
+        full = os.path.normpath(os.path.join(root, rel))
+        if not full.startswith(root.rstrip(os.sep) + os.sep):          # walked outside the folder with ../
+            return False
+        if not os.path.isfile(full):
             return False
         ctype = STATIC_TYPES.get(os.path.splitext(full)[1], "application/octet-stream")
         with open(full, "rb") as f:
