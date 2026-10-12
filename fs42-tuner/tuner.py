@@ -1435,8 +1435,9 @@ def thumbnail(num):
             return hit[1]
     # the picture is taken from the few seconds of output the channel already keeps (no file is read for it)
     body = _grab_frame(chan.station) if guide else _frame_from_prime(chan)
-    with THUMBS_LOCK:
-        THUMBS[num] = (now, body)
+    if body is not None:                              # no frame yet is not remembered: the next ask may have one
+        with THUMBS_LOCK:
+            THUMBS[num] = (now, body)
     return body
 
 

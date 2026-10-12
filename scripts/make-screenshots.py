@@ -270,7 +270,7 @@ def main():
         # the two programme channels from here for a few seconds, as a viewer would
         import threading
 
-        def watch(number, seconds=45):
+        def watch(number, seconds=90):
             try:
                 with urllib.request.urlopen(f"{base}/auto/v{number}", timeout=30) as r:    # nosec B310 - the container started above
                     t0 = time.time()
@@ -280,8 +280,8 @@ def main():
                 pass
         for number in (3, 4):
             threading.Thread(target=watch, args=(number,), daemon=True).start()
-        time.sleep(8)
-        page("index.html", "dashboard.png", 6, full=True)
+        time.sleep(40)                                  # the encoders start and run on a little, past a dark opening
+        page("index.html", "dashboard.png", 8, full=True)
         page("stations.html", "stations.png", 3)
         b.go(f"{base}/files.html", 3)
         b.js("document.getElementById('ta-details') && (document.getElementById('ta-details').open = false)")
