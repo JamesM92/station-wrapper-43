@@ -2,9 +2,9 @@
 """A developer tool, not part of CI: run the image with the repo's code and the demo media, make a couple of stations, and take
 the screenshots in docs/images with a headless browser.
 
-Needs Docker, ffmpeg, and Chromium's headless shell (Playwright's is found in ~/.cache/ms-playwright).
-    python3 scripts/fetch-demo-media.py --dest /tmp/demo/media
-    python3 scripts/make-screenshots.py --media /tmp/demo/media [--image station-wrapper-43-smoke:local] [--out docs/images]
+Needs Docker, ffmpeg, and Chromium's headless shell (Playwright's is found in ~/.cache/ms-playwright). --media is a folder of
+test videos you have: it expects shows/<series>/..., movies/..., commercials/ and cards/ inside it.
+    python3 scripts/make-screenshots.py --media /path/to/test-media [--image station-wrapper-43-smoke:local] [--out docs/images]
 """
 import argparse
 import base64

@@ -34,16 +34,6 @@ Prefer to write the compose file yourself, with only some media folders mounted?
 
 Open `http://<host>:5004`. A new install already has a Channel Guide on channel 1 and a Test Pattern on channel 2; press **Make me a channel now** (or **New station**) to make the first real one. The [QUICKSTART](QUICKSTART.md) has the first ten minutes, and the [reference](docs/REFERENCE.md) has the rest.
 
-### Try it with public-domain videos
-
-No media yet? `scripts/fetch-demo-media.py` downloads a small library the Internet Archive marks as public domain (a Fleischer *Superman* cartoon series, holiday cartoons, a civil-defence short, vintage commercials) with `.nfo` files, posters and "we'll be right back" cards:
-
-```
-python3 scripts/fetch-demo-media.py --dest demo-media      # about 300 MB; --features adds two full films
-```
-
-Mount `demo-media` as `FS42_MEDIA_ROOT`. Where each file came from, and its license mark, is in `demo-media/SOURCES.md`.
-
 ## A short tour
 
 | | |

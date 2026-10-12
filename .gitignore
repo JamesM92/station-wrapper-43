@@ -13,5 +13,6 @@ fieldstation42/src/docs/signoff.mp4
 fieldstation42/src/docs/static.mp4
 fieldstation42/src/docs/off_air_pattern.mp4
 
-# the demo library scripts/fetch-demo-media.py downloads (public domain, but not ours to ship)
+# a local script and folder for getting test videos: not part of the project
+scripts/fetch-demo-media.py
 demo-media/

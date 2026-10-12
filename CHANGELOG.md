@@ -64,7 +64,7 @@ The first public release.
   a tuner can be **guide only**; the old single `passthrough` setting is moved onto the page.
 - **Status page and diagnostics.** What is wrong first, each with a button to the page that fixes it; a media speed test; a
   diagnostics download with the recent messages and no passwords; `/lineup.m3u` for TVHeadend.
-- **Screenshots and a demo library.** `scripts/fetch-demo-media.py` fetches public-domain demo videos (marked so by the Internet Archive) and `scripts/make-screenshots.py` makes the pictures in `docs/images` from a real container.
+- **Screenshots.** `scripts/make-screenshots.py` makes the pictures in `docs/images` from a real container.
 - **The guide says as much as a tuner's own.** Synopsis, aired date, kinds, season and episode, a picture per series or movie (the
   poster, the cover embedded in the video, or a frame), the categories Jellyfin sorts by, and a logo for each channel (your own or
   drawn from its name). Off-air time is a gap, not a programme.
