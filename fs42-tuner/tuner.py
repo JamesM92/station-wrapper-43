@@ -2154,6 +2154,8 @@ class Handler(BaseHTTPRequestHandler):
           /captions/<channel>.json                  where the file is now, and which caption tracks it has
           /captions/<channel>/<file id>/<track>.vtt  one track as WebVTT"""
         parts = rest.split("/")
+        if len(parts) not in (1, 3) or ".." in parts:
+            return self.send_error(404)
         num = parts[0][:-5] if len(parts) == 1 and parts[0].endswith(".json") else parts[0]
         chan = CHANS.get(num)
         if chan is None:
