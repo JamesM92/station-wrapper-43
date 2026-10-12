@@ -465,12 +465,20 @@ class Channel:
         self.reaper = None
         self.now_playing = "--"
         self.reload = threading.Event()       # set to make a running guide channel start over with its new settings
+        self.idle_since = None                # when its last viewer left (a channel winding down)
         self.tail = None                      # set when the last viewer left a station of ours: how many breaks may still start
         self.in_break = False                 # the segment being played is a commercial or a mid card
         self.clock = 0.0                      # seconds of stream sent so far, for continuous timestamps (CONTINUOUS_TS)
 
     def attach(self):
-        """Returns a Subscriber, or None if no encoder slot is free."""
+        """Returns a Subscriber, or None if no encoder slot is free. When the encoders are all busy, the channel that has been
+        winding down the longest (nobody watching it, only its tail left) gives its slot up to the one being tuned to."""
+        sub = self._attach()
+        if sub is None and free_longest_idle(self):
+            sub = self._attach()
+        return sub
+
+    def _attach(self):
         with self.lock:
             if self.reaper:
                 self.reaper.cancel()
@@ -499,6 +507,8 @@ class Channel:
             self.subs.discard(sub)
             sub.dead.set()
             n = len(self.subs)
+            if n == 0:
+                self.idle_since = time.time()
             print(f"[ch{self.number}] viewer left ({n} remaining)")
             if n == 0 and self.thread is not None and self.reaper is None:
                 ext = EXTERNAL.get(self.station)
@@ -829,6 +839,25 @@ def break_reason(station):
     if conf.get("wrapper_mid_cards") is not False and not counts.get("bump"):
         return "NO BUMP"
     return "NO COMMERCIAL" if wants_ads else "NO BUMP"
+
+
+def free_longest_idle(wanting):
+    """All the encoders are busy and somebody tunes to `wanting`: stop the channel that has been idle the longest (no viewers, its
+    encoder only running out its wind-down) and let it have the slot. The TV guide channel is never the one chosen. Returns True
+    when a slot was freed."""
+    best = None
+    for chan in list(CHANS.values()):
+        if chan is wanting or chan.thread is None or chan.subs or chan.idle_since is None:
+            continue
+        if guide_conf(chan.station) is not None:
+            continue
+        if best is None or chan.idle_since < best.idle_since:
+            best = chan
+    if best is None:
+        return False
+    print(f"[ch{best.number}] giving its encoder to channel {wanting.number}: it has been idle the longest", flush=True)
+    best._shutdown(why=f"freed for channel {wanting.number}")
+    return best.thread is None
 
 
 class EncoderPool:

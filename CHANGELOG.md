@@ -16,7 +16,9 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
   so no file is opened for it. A source converted here stays up for 5 minutes after the last viewer (`external_linger_seconds`).
   A station of ours finishes what is queued (the programme and the next whole commercial break with its mid cards) and stops at
   the start of the break after that, or after 15 minutes (`IDLE_TAIL_MINUTES`, `0` for the old 10 seconds), whichever is first.
-  Nothing new is read ahead for nobody, and a viewer who comes back cancels the wind-down.
+  Nothing new is read ahead for nobody, and a viewer who comes back cancels the wind-down. When every encoder is busy and somebody
+  tunes to another channel, the channel that has been idle the longest gives up its encoder at once; a channel with viewers is
+  never taken from, and neither is the TV guide channel.
 - **An external source's channels on the dashboard follow how they are played.** A converted one is treated like a station of our own:
   *idle* until somebody watches it, then a picture that refreshes every 20 seconds like a station's (taken from the few seconds of its own output this container already keeps, so the source is not asked again). One passed on as it is says *passing on*, since nothing here watches it. A
   guide-only tuner has no channels of ours, so it has no tiles.

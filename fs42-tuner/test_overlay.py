@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 
 os.environ.setdefault("FS42_TUNER_CONF", os.path.join(tempfile.mkdtemp(), "c.json"))
@@ -245,6 +246,53 @@ class WindDownTest(unittest.TestCase):
             finally:
                 ch.reaper.cancel()
                 tuner.EXTERNAL.pop(station, None)
+
+
+class FreeAnEncoderTest(unittest.TestCase):
+    def setUp(self):
+        self.pool = tuner.EncoderPool(1)                           # one encoder: every tune-in competes
+        self.made = {}
+        self.real_guide = tuner.guide_conf
+
+    def tearDown(self):
+        tuner.guide_conf = self.real_guide
+        for n in list(self.made):
+            tuner.CHANS.pop(n, None)
+
+    def chan(self, number, station, winding_since=None):
+        ch = tuner.Channel(number, station, self.pool)
+        tuner.CHANS[number] = ch
+        self.made[number] = ch
+        if winding_since is not None:                              # running its tail with nobody watching
+            ch.thread = threading.Thread(target=lambda: None)
+            ch.idle_since = winding_since
+            self.pool.active.add(number)
+        return ch
+
+    def test_the_channel_idle_the_longest_gives_up_its_encoder_to_a_newcomer(self):
+        old, newer = self.chan("71", "A", winding_since=100.0), self.chan("72", "B", winding_since=200.0)
+        self.pool.n = 2
+        self.pool.active = {"71", "72"}
+        want = self.chan("73", "C")
+        sub = want.attach()
+        self.assertIsNotNone(sub)
+        self.assertIsNone(old.thread)                              # the longest idle one let go
+        self.assertIsNotNone(newer.thread)                         # the other keeps winding down
+        self.assertIn("73", self.pool.active)
+
+    def test_a_channel_with_a_viewer_is_never_taken_from(self):
+        busy = self.chan("74", "A", winding_since=100.0)
+        busy.subs.add(tuner.Subscriber())
+        want = self.chan("75", "B")
+        self.assertIsNone(want.attach())                           # nothing free, and nobody to take from
+        self.assertIsNotNone(busy.thread)
+
+    def test_the_tv_guide_is_the_exception(self):
+        guide = self.chan("76", "Guide", winding_since=100.0)
+        tuner.guide_conf = lambda station: {"x": 1} if station == "Guide" else None
+        want = self.chan("77", "Other")
+        self.assertIsNone(want.attach())
+        self.assertIsNotNone(guide.thread)                         # it was not stopped for the newcomer
 
 
 if __name__ == "__main__":
