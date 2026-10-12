@@ -582,10 +582,11 @@ class Files:
 
     def _start_source(self, name, kind, mark, sources, wait, done):
         """Mark list `name` as a source and link `sources` into it: now, or in the background (a build waits for it)."""
-        tag_dir = os.path.join(self.tags_root, name)
-        with open(os.path.join(tag_dir, SHOW_MARK), "w") as f:
+        tag_dir = _within(self.tags_root, name)
+        mark_file = _within(tag_dir, SHOW_MARK)
+        with open(mark_file, "w") as f:
             json.dump(mark, f)
-        self._own(os.path.join(tag_dir, SHOW_MARK))
+        self._own(mark_file)
 
         def link():
             out = {"added": 0, "already_there": 0, "notes": [], "more_notes": 0}
@@ -1064,7 +1065,7 @@ class Files:
         """Why a link can't go at tag_dir/rel: a folder on the way is a link (it would write through it)."""
         cur = tag_dir
         for part in os.path.dirname(rel).split("/") if os.path.dirname(rel) else []:
-            cur = os.path.join(cur, part)
+            cur = _within(cur, part)
             if os.path.islink(cur):
                 return "skipped: a folder on the way is a link, and links are never written through"
             if os.path.lexists(cur) and not os.path.isdir(cur):
@@ -1074,7 +1075,7 @@ class Files:
     def _makedirs(self, tag_dir, rel_dir):
         cur = tag_dir
         for part in rel_dir.split("/") if rel_dir else []:
-            cur = os.path.join(cur, part)
+            cur = _within(cur, part)
             if not os.path.isdir(cur):
                 os.mkdir(cur)
                 self._own(cur)

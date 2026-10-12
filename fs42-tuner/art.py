@@ -59,9 +59,11 @@ def _embedded_stream(path):
     return None
 
 
-def _run(cmd, out):
+def _ffmpeg(path, before, after, out):
+    """Run ffmpeg on one video for one picture: True when `out` was made. The video is one argument after -i, never a shell word."""
     try:
-        subprocess.run(cmd, capture_output=True, timeout=40, check=True)
+        subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", *before, "-i", path, *after],
+                       capture_output=True, timeout=40, check=True)
         return os.path.isfile(out) and os.path.getsize(out) > 200
     except (OSError, subprocess.SubprocessError):
         return False
@@ -89,11 +91,9 @@ def make(path, key):
         got = False
         idx = _embedded_stream(path)
         if idx is not None:
-            got = _run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", path, "-map", f"0:{idx}", "-frames:v", "1", "-vf", scale,
-                        "-q:v", "4", tmp], tmp)
+            got = _ffmpeg(path, [], ["-map", f"0:{idx}", "-frames:v", "1", "-vf", scale, "-q:v", "4", tmp], tmp)
         for ss in ("10", "0") if not got else ():        # a frame ten seconds in, or the first one of a short video
-            got = _run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-ss", ss, "-i", path, "-an", "-frames:v", "1", "-vf", scale,
-                        "-q:v", "4", tmp], tmp)
+            got = _ffmpeg(path, ["-ss", ss], ["-an", "-frames:v", "1", "-vf", scale, "-q:v", "4", tmp], tmp)
             if got:
                 break
     if got:
