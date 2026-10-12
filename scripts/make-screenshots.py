@@ -266,6 +266,21 @@ def main():
                 wait(lambda n=number: in_programme(n), f"channel {number} to be on a programme", 240, 4)
             except RuntimeError:
                 pass
+        # the dashboard shows a picture only for a channel somebody is watching (a channel nobody watches says "idle"): watch
+        # the two programme channels from here for a few seconds, as a viewer would
+        import threading
+
+        def watch(number, seconds=45):
+            try:
+                with urllib.request.urlopen(f"{base}/auto/v{number}", timeout=30) as r:    # nosec B310 - the container started above
+                    t0 = time.time()
+                    while time.time() - t0 < seconds and r.read(65536):
+                        pass
+            except Exception:
+                pass
+        for number in (3, 4):
+            threading.Thread(target=watch, args=(number,), daemon=True).start()
+        time.sleep(8)
         page("index.html", "dashboard.png", 6, full=True)
         page("stations.html", "stations.png", 3)
         b.go(f"{base}/files.html", 3)

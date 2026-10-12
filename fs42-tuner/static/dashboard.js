@@ -86,6 +86,8 @@
 
   function renderChannels(rows) {
     const bucket = Math.floor(Date.now() / THUMB_BUCKET_MS);
+    // Keep the picture elements across redraws: replacing them blanks the picture while the new one loads, which flickers.
+    const kept = new Map([...channelsEl.querySelectorAll("img.thumb-img[data-ch]")].map((i) => [i.dataset.ch, i]));
     channelsEl.innerHTML = rows.map((r) => {
       const n = esc(r.channel);
       const now = r.now;
@@ -97,11 +99,13 @@
       if (r.pattern) {
         thumb = `<div class="thumb-pattern"><span>${esc(r.pattern)}</span></div>`;
       } else if (now && now.content_type === "guide") {
-        thumb = `<img class="thumb-img" alt="" src="/thumb/${n}.jpg?b=${Math.floor(Date.now() / GUIDE_BUCKET_MS)}">`;
+        thumb = `<img class="thumb-img" alt="" data-ch="${n}" src="/thumb/${n}.jpg?b=${Math.floor(Date.now() / GUIDE_BUCKET_MS)}">`;
+      } else if (r.external) {
+        thumb = '<div class="thumb-off">external</div>';        // nothing here watches or acts on an external source
       } else if (!r.viewers) {
         thumb = '<div class="thumb-off">idle</div>';
       } else if (now && !now.is_stream) {
-        thumb = `<img class="thumb-img" alt="" src="/thumb/${n}.jpg?b=${bucket}">`;
+        thumb = `<img class="thumb-img" alt="" data-ch="${n}" src="/thumb/${n}.jpg?b=${bucket}">`;
       } else {
         thumb = '<div class="thumb-off">live stream</div>';
       }
@@ -133,8 +137,22 @@
       </a>`;
     }).join("");
 
+    channelsEl.querySelectorAll("img.thumb-img[data-ch]").forEach((fresh) => {
+      const was = kept.get(fresh.dataset.ch);
+      if (!was) return;                                                // first time: let it load as it is
+      const src = fresh.getAttribute("src");
+      fresh.replaceWith(was);                                          // the picture on screen stays until the next one is ready
+      if (was.getAttribute("src") !== src) {
+        const next = new Image();
+        next.onload = () => { was.src = src; };
+        next.onerror = () => { was.src = src; };                       // let its own error handling show "no preview"
+        next.src = src;
+      }
+    });
     channelsEl.querySelectorAll(".chan-logo").forEach((img) => img.addEventListener("error", () => img.remove()));
     channelsEl.querySelectorAll(".thumb-img").forEach((img) => {
+      if (img.dataset.bound) return;                                   // a kept picture already has its handler
+      img.dataset.bound = "1";
       img.addEventListener("error", () => {
         const off = document.createElement("div");
         off.className = "thumb-off";
