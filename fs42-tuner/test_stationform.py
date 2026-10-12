@@ -196,6 +196,16 @@ class ConfTest(unittest.TestCase):
         again = sf.to_conf(sf.validate({**standard(), "caption_track": True}), existing=off)
         self.assertNotIn("wrapper_caption_track", again)                              # turned back on: the key goes
 
+    def test_the_volume_is_evened_out_unless_the_station_says_no_and_round_trips(self):
+        self.assertNotIn("wrapper_level_audio", sf.to_conf(sf.validate(standard())))           # absent means on
+        off = sf.to_conf(sf.validate({**standard(), "level_audio": False}))
+        self.assertIs(off["wrapper_level_audio"], False)
+        form, _ = sf.parse_base({**off, "network_name": "Cartoons", "channel_number": 12, "network_type": "standard",
+                                 "content_dir": sf.CONTENT_DIR, "schedule_increment": 30, "break_strategy": "end"})
+        self.assertIs(form["level_audio"], False)
+        again = sf.to_conf(sf.validate({**standard(), "level_audio": True}), existing=off)
+        self.assertNotIn("wrapper_level_audio", again)
+
     def test_a_loop_station_repeats_one_list(self):
         c = sf.to_conf(sf.validate({"name": "Loop", "number": 1, "kind": "loop", "loop": {"list": "Test Pattern", "shuffle": True}}))
         self.assertEqual((c["network_type"], c["content_dir"], c["shuffle_loop"]), ("loop", "catalog/by-genre/Test Pattern", True))

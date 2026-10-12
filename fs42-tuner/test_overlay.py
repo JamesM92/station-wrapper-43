@@ -295,5 +295,19 @@ class FreeAnEncoderTest(unittest.TestCase):
         self.assertIsNotNone(guide.thread)                         # it was not stopped for the newcomer
 
 
+class VolumeFilterTest(unittest.TestCase):
+    def test_the_gain_goes_into_the_encoder_command_only_when_there_is_one(self):
+        plain = tuner.segment_cmd("/m/a.mp4", 0, 30, False)
+        self.assertNotIn("-af", plain)
+        leveled = tuner.segment_cmd("/m/a.mp4", 0, 30, False, audio="volume=+4.00dB,alimiter=limit=0.891")
+        self.assertEqual(leveled[leveled.index("-af") + 1], "volume=+4.00dB,alimiter=limit=0.891")
+        self.assertLess(leveled.index("-af"), leveled.index("pipe:1"))
+
+    def test_a_live_stream_and_a_station_that_says_no_are_left_alone(self):
+        class E:
+            is_stream = True
+        self.assertIsNone(tuner.audio_level_filter("S", E(), "/m/a.mp4"))
+
+
 if __name__ == "__main__":
     unittest.main()

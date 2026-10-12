@@ -98,5 +98,15 @@ class CaptionLanguage(unittest.TestCase):
                 settings.set_captions({"language": bad}, path)
 
 
+class VolumeTarget(unittest.TestCase):
+    def test_broadcast_by_default_and_a_target_in_range_is_kept(self):
+        path = os.path.join(tempfile.mkdtemp(), "settings.json")
+        self.assertEqual(settings.get_loudness(path), {"target": -23.0})
+        self.assertEqual(settings.set_loudness({"target": -16}, path), {"target": -16.0})
+        for bad in (0, -50, "loud", None, True):
+            with self.assertRaises(settings.SettingsError):
+                settings.set_loudness({"target": bad}, path)
+
+
 if __name__ == "__main__":
     unittest.main()

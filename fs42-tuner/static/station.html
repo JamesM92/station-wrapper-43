@@ -41,6 +41,10 @@
           <input id="f-logo" type="text" maxlength="300" placeholder="logos/my-channel.png">
           <span class="hint">A picture inside your media folder (a .png, .jpg or .webp), shown beside the channel in Jellyfin's guide. Left empty, one is drawn from the channel's number and name. Jellyfin picks it up at its next Refresh Guide.</span>
         </div>
+        <div class="field" id="f-level-field">
+          <label class="check"><input id="f-level" type="checkbox" checked> Even out the volume</label>
+          <span class="hint">Shows and commercials are brought to the same loudness (the target is set on the Stations page), so a commercial is not louder than the programme. Each video is measured once, in the background, and a video not measured yet plays as it is.</span>
+        </div>
         <div class="field" id="f-captions-field">
           <label class="check"><input id="f-captrack" type="checkbox" checked> Carry captions as a track viewers can switch</label>
           <span class="hint">When the video on air has captions (a <code>.srt</code>/<code>.vtt</code>/<code>.ass</code> file beside it with the same name, or a text track inside it), they go out in the stream as a caption track (CEA-608), which a player lists under its captions button, in the language set on the Stations page. To draw them on the picture instead, always visible, switch that on for a block of the calendar.</span>

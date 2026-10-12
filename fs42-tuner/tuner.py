@@ -67,6 +67,7 @@ from xml.sax.saxutils import escape
 import auth as authmod
 import captions
 import ccinject
+import loudness
 import console_client
 import files as filemgr
 import keeper as keepermod
@@ -265,7 +266,7 @@ def _continuous(mux):
     return [("+resend_headers" if m == "+resend_headers+initial_discontinuity" else m) for m in mux]
 
 
-def segment_cmd(path, seek, duration, is_stream, ts_offset=None, text=None, subs=None, ordered=False):
+def segment_cmd(path, seek, duration, is_stream, ts_offset=None, text=None, subs=None, ordered=False, audio=None):
     """ffmpeg for one plan entry. -ss before -i so the seek is fast, -t bounds
     it to the scheduled duration so a file that runs long can't push the
     channel off its own clock. -re paces output at realtime: without it ffmpeg
@@ -277,6 +278,8 @@ def segment_cmd(path, seek, duration, is_stream, ts_offset=None, text=None, subs
     else:
         cmd += ["-ss", f"{seek:.3f}", "-i", path, "-t", f"{duration:.3f}"]
     enc = with_subtitles(NORMALIZE, subs)
+    if audio:                                    # the volume brought to the target: one fixed gain, then a limiter
+        enc = enc + ["-af", audio]
     if ordered:                                  # captions are put in frame by frame: the frames must be in the order they are shown
         enc = enc + ["-bf", "0"]
     if ts_offset is not None:                    # timestamps carry on from the last segment: one continuous stream
@@ -332,7 +335,25 @@ def still_cmd(path, seconds, text=None):
                       "-t", f"{max(seconds, 1):.1f}"] + NORMALIZE + MUX + ["pipe:1"], text)
 
 
-_CAPTION_PREFS = {"at": 0.0, "track": {}}
+_CAPTION_PREFS = {"at": 0.0, "track": {}, "level": {}}
+
+
+def level_audio(station):
+    """Is the volume of this station's videos evened out? On unless the station says no."""
+    caption_track(station)                                  # keeps the shared station-settings cache fresh
+    return _CAPTION_PREFS["level"].get(station, True)
+
+
+def audio_level_filter(station, entry, original):
+    """The audio filter that brings a video to the volume target, or None (switched off for the station, a live stream, or the
+    video is not measured yet: it is queued, and plays as it is this time)."""
+    if entry.is_stream or os.environ.get("LOUDNESS", "1").lower() in ("0", "false", "no", "off") or not level_audio(station):
+        return None
+    try:
+        return LEVELS.filter_for(original)
+    except Exception as e:                                  # an even volume is a nicety: never the reason a channel goes quiet
+        print(f"! volume of {os.path.basename(original)}: {e}", flush=True)
+        return None
 
 
 def caption_track(station):
@@ -343,6 +364,7 @@ def caption_track(station):
         except OSError:
             confs = {}
         _CAPTION_PREFS["track"] = {n: c.get("wrapper_caption_track") is not False for n, c in confs.items()}
+        _CAPTION_PREFS["level"] = {n: c.get("wrapper_level_audio") is not False for n, c in confs.items()}
         _CAPTION_PREFS["at"] = time.time()
     return _CAPTION_PREFS["track"].get(station, True)
 
@@ -692,7 +714,8 @@ class Channel:
             inject = caption_injector(self.station, entry, path, cur.seek)
             sent = self._pipe(segment_cmd(local, cur.seek, cur.remaining, entry.is_stream, self.clock if CONTINUOUS_TS else None,
                                           text=offair, subs=subs,
-                                          ordered=inject is not None),
+                                          ordered=inject is not None,
+                                          audio=audio_level_filter(self.station, entry, path)),
                               label=name, cached=pinned, inject=inject)
             self.clock += cur.remaining
             if sent < 1024 and not entry.is_stream and not self.stop.is_set() and not self.reload.is_set():
@@ -905,6 +928,8 @@ if not os.environ.get("PREFETCH_STATS"):                    # what it has learne
 PREFETCH = prefetch.Prefetcher(_PREFETCH_CFG, DB_PATH,
                                watched=lambda: {n: c.station for n, c in CHANS.items() if c.subs},
                                media_root=CONF.get("media_root", "/mnt/media"), path_of=lambda p: media_path(p))
+LEVELS = loudness.Levels(os.path.join(os.path.dirname(settings.PATH), "loudness.json"), LIBRARY_ROOT,
+                         target_fn=lambda: settings.get_loudness()["target"])
 VIEWERS = threading.BoundedSemaphore(TUNER_COUNT)
 PT_BUDGET = None            # set at startup once the real device is queried
 
@@ -1801,6 +1826,19 @@ class Handler(BaseHTTPRequestHandler):
             if not EDIT_FILES:
                 return self._json({"error": "this is switched off (DASHBOARD_EDIT=0)"}, 403)
             return self._json(diag.speed_test(CONF.get("media_root", "/mnt/media")))
+        if p == "/api/loudness/settings":
+            body = self._json_body()
+            if body is None:
+                return None
+            if not EDIT_FILES:
+                return self._json({"error": "changing settings is switched off (DASHBOARD_EDIT=0)"}, 403)
+            try:
+                got = settings.set_loudness(body)
+            except settings.SettingsError as e:
+                return self._json({"error": str(e)}, 400)
+            except OSError as e:
+                return self._json({"error": f"could not save the settings: {e.strerror}"}, 500)
+            return self._json({"settings": got, "status": LEVELS.status()})
         if p == "/api/captions/settings":
             body = self._json_body()
             if body is None:
@@ -2056,6 +2094,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if p == "/api/titles":
             return self._json({"settings": settings.get_titles(), "edit": EDIT_FILES})
+        if p == "/api/loudness":
+            return self._json({"settings": settings.get_loudness(), "status": LEVELS.status(), "edit": EDIT_FILES})
         if p == "/api/captions":
             return self._json({"settings": settings.get_captions(), "edit": EDIT_FILES})
 
@@ -2332,6 +2372,8 @@ if __name__ == "__main__":
         except Exception:
             pass
     threading.Thread(target=warm_media, daemon=True, name="media-warm").start()
+    if os.environ.get("LOUDNESS", "1").lower() not in ("0", "false", "no", "off"):
+        threading.Thread(target=LEVELS.loop, daemon=True, name="loudness").start()
     if PREFETCH.enabled:
         print(f"[prefetch] on: next-break and next-episode copies in {PREFETCH.cfg['dir']} "
               f"({'RAM' if PREFETCH.cfg['ram_only'] else 'disk'}), up to {PREFETCH.cache.max_bytes // 1048576} MB", flush=True)

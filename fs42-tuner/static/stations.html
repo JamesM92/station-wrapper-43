@@ -46,6 +46,21 @@
       </div>
       <p id="c-status" class="dim"></p>
     </section>
+    <section class="panel" id="volume-panel" aria-label="Volume">
+      <h2>Volume</h2>
+      <p class="dim">Shows and commercials are brought to one loudness, so a commercial is not louder than the programme. Each video is measured once, in the background, and a fixed gain is applied when it plays; a video not measured yet plays as it is. A station can switch it off on its own page.</p>
+      <div class="ta-row">
+        <label>Target loudness
+          <select id="v-target" aria-label="Target loudness">
+            <option value="-23">Broadcast television (-23 LUFS)</option>
+            <option value="-20">A little louder (-20 LUFS)</option>
+            <option value="-16">Streaming (-16 LUFS)</option>
+          </select>
+        </label>
+        <button type="button" class="btn primary" id="v-save">Save</button>
+      </div>
+      <p id="v-status" class="dim"></p>
+    </section>
     <section id="cards" class="cards" aria-label="Stations"></section>
   </main>
   <script src="/common.js"></script>

@@ -272,6 +272,23 @@ FieldStation42's console has no folder or file browser, so the dashboard has one
 
 The page only changes things inside `catalog/by-genre`, and only accepts JSON requests, which a web page on another site can't send to it. It is behind the dashboard's login (below). `DASHBOARD_EDIT=0` (or `"edit": false` in the tuner config) turns the changing actions off and leaves browsing on.
 
+## Even volume
+
+Shows and commercials come at different loudness, so a break can be louder than the programme. The container measures each video
+once (EBU R128 integrated loudness and true peak, audio only, in the background at low priority) and remembers the answer in
+`config/loudness.json`. When the video plays, one fixed gain brings it to the target, with a limiter behind it for a stray peak.
+
+- **Target:** set on the Stations page (*Volume*): -23 LUFS (broadcast television, the default), -20 or -16 (streaming).
+- **Per station:** *Even out the volume* on a station's page, on by default.
+- **Why a fixed gain:** a live compressor can't settle on a 30 second commercial and has no look-ahead after a join, and it flattens a
+  film. A fixed gain changes how loud a video is and nothing else. A very quiet video is raised by at most 12 dB, and a video is
+  never pushed so far that its peaks need more than 3 dB of limiting.
+- **Not measured yet:** the video plays as it is, and is measured next (a video about to play goes to the front of the queue). The
+  Stations page shows how many are measured. A new library is measured within minutes to hours, depending on its size and the share.
+- **Not covered:** a live stream or an antenna channel passed on or converted from a source (they are not files), and a video with
+  no audio.
+- **Switching it off:** `LOUDNESS=0` for the whole container.
+
 ## Dead links and duplicates (the Lists & files page)
 
 Above the lists, the Lists & files page shows how many videos your lists hold and flags two things, with the number beside the list they are in:

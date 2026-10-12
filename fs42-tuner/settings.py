@@ -226,6 +226,27 @@ def set_captions(values, path=None):
     return get_captions(path)
 
 
+# ---- the volume target (loudness.py)
+def get_loudness(path=None):
+    """{"target": LUFS}: the loudness shows and commercials are brought to (-23 is broadcast television)."""
+    saved = load(path).get("loudness")
+    t = saved.get("target") if isinstance(saved, dict) else None
+    if isinstance(t, (int, float)) and not isinstance(t, bool) and -30 <= t <= -10:
+        return {"target": float(t)}
+    return {"target": -23.0}
+
+
+def set_loudness(values, path=None):
+    path = path or PATH
+    t = values.get("target")
+    if isinstance(t, bool) or not isinstance(t, (int, float)) or not -30 <= t <= -10:
+        raise SettingsError("the volume target is between -30 and -10 LUFS (-23 is broadcast television)")
+    data = load(path)
+    data["loudness"] = {"target": float(t)}
+    _save(path, data)
+    return get_loudness(path)
+
+
 # ---- the schedule keeper: keeps every station's schedule running a few days ahead
 DEFAULT_KEEPER = {"enabled": True, "days_ahead": 7}
 DAYS_AHEAD_RANGE = (1, 30)

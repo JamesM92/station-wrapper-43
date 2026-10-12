@@ -734,6 +734,7 @@
     $("loop").hidden = kind() !== "loop";
     $("guide-panel").hidden = kind() !== "guide";
     $("f-captions-field").hidden = kind() === "guide";                     // a guide channel has no videos to caption
+    $("f-level-field").hidden = kind() === "guide";                        // nor to level
     $("save-apply").hidden = kind() !== "guide";
     $("save-build").hidden = $("build-note").hidden = kind() === "guide";      // a guide channel is drawn live: nothing to build
   }
@@ -751,7 +752,7 @@
 
   function collect() {
     const form = { name: $("f-name").value, number: $("f-number").value === "" ? null : Number($("f-number").value), kind: kind(),
-      logo: $("f-logo").value.trim(), caption_track: $("f-captrack").checked };
+      logo: $("f-logo").value.trim(), caption_track: $("f-captrack").checked, level_audio: $("f-level").checked };
     if (form.kind === "standard") {
       form.schedule = clone(state.schedule);
       form.increment = Number($("f-inc").value);
@@ -781,6 +782,7 @@
     $("f-number").value = form.number;
     $("f-logo").value = form.logo || "";
     $("f-captrack").checked = form.caption_track !== false;
+    $("f-level").checked = form.level_audio !== false;
     document.querySelector(`input[name=kind][value=${form.kind}]`).checked = true;
     if (form.kind === "standard") {
       state.schedule = form.schedule ? clone(form.schedule) : newDefinition();

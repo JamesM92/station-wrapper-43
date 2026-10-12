@@ -103,6 +103,8 @@ services:
       # After the last viewer leaves, a station finishes what is queued (the programme and the next break) or stops after this many
       # minutes. 0 stops it 10 seconds after the last viewer. Blank is 15.
       IDLE_TAIL_MINUTES: ${IDLE_TAIL_MINUTES:-}
+      # Shows and commercials are brought to one volume (a fixed gain per video, measured once in the background). 0 switches it off.
+      LOUDNESS: ${LOUDNESS:-}
       FARM_INTERVAL_MINUTES: ${FARM_INTERVAL_MINUTES:-30}
       SYNC_INTERVAL_MINUTES: ${SYNC_INTERVAL_MINUTES:-60}
       SYNC_FULL_EVERY_HOURS: ${SYNC_FULL_EVERY_HOURS:-24}

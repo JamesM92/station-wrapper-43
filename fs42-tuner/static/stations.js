@@ -116,6 +116,27 @@
   }));
   $("k-save").addEventListener("click", () => run(async () => { await saveKeeper(); say("Saved.", "ok"); }));
 
+  // ---- the volume target
+  async function loadVolume() {
+    const v = await call("/api/loudness");
+    const sel = $("v-target");
+    const t = String(Math.round(v.settings.target));
+    if (![...sel.options].some((o) => o.value === t)) sel.append(el("option", { value: t, textContent: `${t} LUFS` }));
+    sel.value = t;
+    sel.disabled = $("v-save").disabled = !editable;
+    const st = v.status || {};
+    const parts = [`${st.measured || 0} videos measured`];
+    if (st.queued) parts.push(`${st.queued} waiting`);
+    if (st.measuring) parts.push(`measuring ${st.measuring}`);
+    if (st.failed) parts.push(`${st.failed} could not be read`);
+    $("v-status").textContent = parts.join(", ") + ".";
+  }
+  $("v-save").addEventListener("click", () => run(async () => {
+    await call("/api/loudness/settings", { target: Number($("v-target").value) });
+    await loadVolume();
+    say("Saved. The new target is used from the next programme.", "ok");
+  }));
+
   // ---- the caption language
   async function loadCaptions() {
     const c = await call("/api/captions");
@@ -144,6 +165,7 @@
     for (const s of data.stations) box.append(card(s));
     loadKeeper(!loadedKeeper).then(() => { loadedKeeper = true; }).catch(() => {});
     loadCaptions().catch(() => {});
+    loadVolume().catch(() => {});
     if (!editable) say("Changing stations is switched off on this server (DASHBOARD_EDIT=0). You can still look.", "err");
   }
 
