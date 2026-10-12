@@ -192,10 +192,16 @@ class RouteTest(unittest.TestCase):
         saved = json.load(open(os.path.join(self.root, "library-scan.json")))
         self.assertEqual(saved["data"]["totals"]["videos"], 5)
 
-    def test_the_dashboard_page_has_the_library_section(self):
-        page = self.get("/").decode()
-        self.assertIn('id="library"', page)
-        self.assertIn("/library.json", self.get("/dashboard.js").decode())
+    def test_the_counts_and_rescan_are_on_the_lists_page_not_the_dashboard(self):
+        dash = self.get("/").decode()
+        self.assertNotIn('id="library"', dash)                       # the dashboard no longer carries the library section
+        self.assertNotIn("lib-rescan", dash)
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "files.html")) as f:     # behind the login here
+            files = f.read()
+        self.assertIn('id="lib-rescan"', files)
+        self.assertIn('id="lib-summary"', files)
+        js = self.get("/files.js").decode()
+        self.assertIn("/library.json?refresh", js)
 
 
 class NoScanYetTest(RouteTest):
@@ -208,7 +214,7 @@ class NoScanYetTest(RouteTest):
 
     test_a_change_waits_for_the_next_scan_until_you_ask_for_one = test_the_first_answer_is_what_the_regular_scan_found
     test_a_scan_is_saved_so_a_restart_has_something_to_show = test_the_first_answer_is_what_the_regular_scan_found
-    test_the_dashboard_page_has_the_library_section = test_the_first_answer_is_what_the_regular_scan_found
+    test_the_counts_and_rescan_are_on_the_lists_page_not_the_dashboard = test_the_first_answer_is_what_the_regular_scan_found
 
     def test_opening_the_page_does_not_start_a_scan(self):
         for _ in range(3):

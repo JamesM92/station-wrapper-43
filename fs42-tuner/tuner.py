@@ -95,7 +95,7 @@ CONF = json.load(open(os.environ.get("FS42_TUNER_CONF", "config.json")))
 
 DB_PATH      = CONF["db_path"]
 CATALOG_ROOT = CONF.get("catalog_root", ".")
-# The content folder the dashboard's Library section reads (read-only). The
+# The content folder the Lists & files page's counts read (read-only). The
 # generator builds it as catalog/by-genre.
 LIBRARY_ROOT = CONF.get("library_root") or os.path.join(CATALOG_ROOT, "catalog", "by-genre")
 # Channel numbers are strings throughout: a real HDHomeRun reports ATSC virtual
@@ -238,6 +238,7 @@ STARTED = time.time()
 STATS = {"viewers_served": 0, "refused": 0, "encoder_starts": 0}
 STATS_LOCK = threading.Lock()
 THUMB_TTL = 30                      # seconds a snapshot is reused
+THUMB_TTL_GUIDE = 8                 # the guide channel is drawn here, not read from a file: cheap to keep fresh
 THUMBS = {}                         # number -> (taken_at, jpeg bytes or None)
 THUMBS_LOCK = threading.Lock()
 
@@ -1025,6 +1026,90 @@ def GUIDE_STATIONS():
     return list(_GUIDE_CONFS["confs"])
 
 
+_GUIDE_LOGOS = {"doc": None, "map": {}}
+
+
+def guide_logos():
+    """{channel number: icon address} from the channels of our guide (an antenna's logos come with its listings), read
+    again only when the guide itself has been made again."""
+    try:
+        doc = GUIDE.xmltv() if GUIDE is not None else None
+    except Exception:
+        return _GUIDE_LOGOS["map"]
+    if doc is None or _GUIDE_LOGOS["doc"] is doc:
+        return _GUIDE_LOGOS["map"]
+    found = {}
+    try:
+        from defusedxml import ElementTree as SafeET
+        for ch in SafeET.fromstring(doc).findall("channel"):
+            icon = ch.find("icon")
+            src = icon.get("src") if icon is not None else ""
+            if not str(src).lower().startswith(("http://", "https://")):
+                continue
+            for name in ch.findall("display-name"):
+                text = (name.text or "").strip()
+                if re.fullmatch(r"\d+(\.\d+)?", text):
+                    found[text] = src
+    except Exception:
+        found = _GUIDE_LOGOS["map"]
+    _GUIDE_LOGOS["doc"], _GUIDE_LOGOS["map"] = doc, found
+    return found
+
+
+def _external_logo(ext, num):
+    """The logo of an external source's channel for the dashboard: the one its source gave it, else the one the guide has
+    for that channel number, else none. Only an http or https address."""
+    for src in (ext.get("logo"), guide_logos().get(str(num))):
+        if str(src or "").lower().startswith(("http://", "https://")):
+            return src
+    return ""
+
+
+_FILE_GONE = {}
+_BREAK_WHY = {}
+
+
+def _file_missing(path):
+    """Is this video's file gone? One stat, remembered for a minute (the dashboard asks every few seconds)."""
+    now = time.time()
+    hit = _FILE_GONE.get(path)
+    if hit and now - hit[0] < 60:
+        return hit[1]
+    gone = not os.path.exists(path)
+    if len(_FILE_GONE) > 500:
+        _FILE_GONE.clear()
+    _FILE_GONE[path] = (now, gone)
+    return gone
+
+
+def pattern_reason(chan, cur):
+    """The words for a channel that shows the test pattern, or None when it is playing a programme: nothing scheduled, the
+    schedule's own off-air video, a file that is gone, or what the encoder itself fell back to. Looks at no video's data."""
+    if cur is None:
+        return "NO PROGRAMMING"
+    entry = cur.entry
+    why = offair_reason(chan.station, entry, cur.block_title)
+    if why:
+        deliberate = (getattr(entry, "content_type", "") != "off_air"
+                      and str(cur.block_title).strip().lower() not in ("offair", "off air", "off-air"))
+        return "TEST PATTERN" if deliberate else why        # a station that plays the test card as its programme, or time nothing fills
+    if not entry.is_stream:
+        path = media_path(entry.path)
+        if os.path.splitext(path)[1].lower() in IMAGE_EXT:         # a picture is what an empty break shows
+            now = time.time()
+            hit = _BREAK_WHY.get(chan.station)
+            if not hit or now - hit[0] > 30:
+                hit = (now, break_reason(chan.station))
+                _BREAK_WHY[chan.station] = hit
+            return hit[1]
+        if _file_missing(path):
+            return ("NO FILE: " + os.path.basename(entry.path))[:60]
+    now_playing = str(chan.now_playing or "")
+    if now_playing.startswith("Test pattern: "):                    # while it is encoding, what it fell back to and why
+        return now_playing[len("Test pattern: "):].upper()[:60]
+    return None
+
+
 def channels_status():
     rows = []
     for num, chan in sorted(CHANS.items(), key=lambda kv: _sortkey(kv[0])):
@@ -1034,7 +1119,8 @@ def channels_status():
                          "encoding": chan.thread is not None,
                          "now": {"title": ext["name"], "file": ext["source"], "content_type": "iptv", "is_stream": True,
                                  "elapsed": 0, "duration": 0, "block_end": ""},
-                         "external": {"source": ext["source"], "type": ext["type"], "mode": ext["mode"]}})
+                         "external": {"source": ext["source"], "type": ext["type"], "mode": ext["mode"],
+                                      "logo": _external_logo(ext, num)}})
             continue
         gc_ = guide_conf(chan.station)
         if gc_ is not None:                         # a guide channel is always on air: it is drawn live
@@ -1049,6 +1135,7 @@ def channels_status():
             cur = None
         row = {"channel": num, "station": chan.station, "on_air": cur is not None,
                "viewers": len(chan.subs), "encoding": chan.thread is not None, "now": None}
+        row["pattern"] = pattern_reason(chan, cur)
         if cur is not None:
             row["now"] = {
                 "title": cur.block_title,
@@ -1231,10 +1318,13 @@ def thumbnail(num):
     chan = CHANS.get(num)
     if chan is None:
         return None
+    guide = guide_conf(chan.station) is not None
+    if not guide and not chan.subs:                  # nobody is watching: no video is opened just to paint a dashboard tile
+        return None
     now = time.time()
     with THUMBS_LOCK:
         hit = THUMBS.get(num)
-        if hit and now - hit[0] < THUMB_TTL:
+        if hit and now - hit[0] < (THUMB_TTL_GUIDE if guide else THUMB_TTL):
             return hit[1]
     body = _grab_frame(chan.station)
     with THUMBS_LOCK:

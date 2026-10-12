@@ -5,6 +5,26 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
 
 ## [Unreleased]
 
+### Changed
+- **The dashboard's pictures are cheaper and say why.** A channel nobody is watching shows **idle** and no video is opened for it
+  (a snapshot reads the video, which on a network share is real work); once somebody watches it, its picture refreshes every
+  20 seconds. The TV guide channel shows its own guide, drawn here and refreshed every 10 seconds, without an encoder running.
+  A channel that is off air, has nothing scheduled, has a file that is gone, or fell back to the test pattern shows the test
+  pattern with its reason in the corner (*NO PROGRAMMING*, *NO FILE: name*, *BAD FILE*, *NO VIDEOS IN: list*...).
+- **The dashboard is lighter.** The Library section (the lists, tag by tag) is gone from the dashboard. The counts, the dead-link and
+  duplicate warnings (beside the list they are in) and the **Rescan** button are on the Lists & files page, above the lists.
+
+### Added
+- **Channel logos on the dashboard.** Each channel's card shows its logo in the top left of its picture: a station's own (the one set
+  on the station, else one drawn from its name), and an external source's channel's, when its source or its guide has one.
+
+### Fixed
+- **An antenna tuner's logos in the guide.** A tuner added in converted or passed-on mode lost the logos that came with its listings;
+  they are now kept on the channel in `/xmltv.xml`, so Jellyfin shows them in those modes too (guide only already did).
+- **A link to a video that is gone no longer stops a catalog rebuild.** A list that held a link whose video had been moved or deleted
+  made the rebuild fail with `No such file or directory: .../star.mkv` after FieldStation42 had already deleted the station's
+  schedule. Such a link is now left out of the scan (the console log names it once) and the rebuild goes on with the rest.
+
 ## [0.7.0] - 2026-10-11
 
 The first public release.

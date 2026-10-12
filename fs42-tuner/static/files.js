@@ -196,16 +196,58 @@
       const n = li.dataset.tag != null ? state.counts[li.dataset.tag] : null;
       const c = li.querySelector(".count");
       if (c) c.textContent = n != null ? `${n} videos` : (state.counting ? "not counted yet" : "");
+      const w = (state.warns || {})[li.dataset.tag];
+      let badge = li.querySelector(".badge");
+      const text = w ? [w.dead ? `${w.dead} dead` : "", w.duplicates ? `${w.duplicates} duplicate` : ""].filter(Boolean).join(", ") : "";
+      if (text) {
+        if (!badge) { badge = el("span", { className: "badge warn" }); li.append(badge); }
+        badge.textContent = text;
+        badge.title = "Dead: a link whose video is gone (judged from inside the container). Duplicate: the same video linked more than once in this list, so it is scheduled more often.";
+      } else if (badge) {
+        badge.remove();
+      }
     }
   }
+  function paintSummary(lib) {
+    const box = $("lib-summary");
+    if (!box) return;
+    if (lib.never) { box.textContent = "Counting the videos in your lists\u2026"; box.classList.remove("warn"); return; }
+    if (lib.found === false) { box.textContent = ""; return; }
+    const t = lib.totals || { videos: 0, dead: 0, duplicates: 0 };
+    const warns = [];
+    if (t.dead) warns.push(`${t.dead} dead link${t.dead === 1 ? "" : "s"}`);
+    if (t.duplicates) warns.push(`${t.duplicates} duplicate${t.duplicates === 1 ? "" : "s"}`);
+    box.textContent = (lib.scanning ? "Scanning\u2026 " : "") + `${t.videos} videos in ${(lib.tags || []).length} lists` + (warns.length ? ` \u2014 ${warns.join(", ")}` : "");
+    box.classList.toggle("warn", warns.length > 0);
+  }
+  // Rescan: ask for a fresh count, then look every few seconds until it has finished
+  async function rescan() {
+    say("Counting the videos in your lists again\u2026");
+    await call("/library.json?refresh");
+    for (let i = 0; i < 120; i++) {
+      await new Promise((r) => setTimeout(r, 5000));
+      const lib = await call("/library.json");
+      paintSummary(lib);
+      if (!lib.scanning) break;
+    }
+    await loadCounts(false);
+    say("Counted again.", "ok");
+  }
+  $("lib-rescan").addEventListener("click", () => run(rescan));
+
   async function loadCounts(fresh, tries = 0) {
     clearTimeout(countsTimer);
     try {
       const lib = await call("/library.json");           // the last scheduled scan: opening this page never starts one
       state.counts = {};
-      for (const t of lib.tags || []) state.counts[t.tag] = t.videos;
+      state.warns = {};
+      for (const t of lib.tags || []) {
+        state.counts[t.tag] = t.videos;
+        if (t.dead || t.duplicates) state.warns[t.tag] = { dead: t.dead || 0, duplicates: t.duplicates || 0 };
+      }
       state.counting = !!lib.never;                      // no scan has finished yet since the server started
       state.scanAge = lib.age_seconds;
+      paintSummary(lib);
       paintCounts();
       if (lib.never && tries < 90) countsTimer = setTimeout(() => loadCounts(false, tries + 1).catch(() => {}), 10000);
     } catch (e) { state.counting = false; paintCounts(); }        // counts are a nicety

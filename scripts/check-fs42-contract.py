@@ -47,6 +47,8 @@ GENERATOR_EXPECTATIONS = [
      r'def make_reel_fill\(self, when, length, use_bumpers=True'),
     ("fs42/liquid_schedule.py", 'a slot\'s own "bump_dir" (the schedule editor\'s mid card blocks)', r'slot_config.get\("bump_dir"'),
     ("fs42/liquid_manager.py", "LiquidManager.reset_sequences (console_launch.py guards it)", r'def reset_sequences\(self, station_config\)'),
+    ("fs42/media_processor.py", "MediaProcessor.rich_find_media and _rfind_media (console_launch.py skips dead links)",
+     r'def rich_find_media\(path: str, media_filter="video"\)[\s\S]*def _rfind_media\('),
     ("station_42.py", "the -s / --server option the console is started with", r'"-s",\s*"--server"'),
 ]
 

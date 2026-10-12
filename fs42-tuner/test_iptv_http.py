@@ -61,7 +61,7 @@ class SourcesHttpTest(unittest.TestCase):
         self.assertFalse(lineup["100"]["Favorite"])                                  # not one of the FieldStation42 channels
         with urllib.request.urlopen(self.srv.base + "/channels.json", timeout=10) as r:
             rows = {x["channel"]: x for x in json.load(r)}
-        self.assertEqual(rows["200"]["external"], {"source": "Playlist", "type": "m3u", "mode": "convert"})
+        self.assertEqual(rows["200"]["external"], {"source": "Playlist", "type": "m3u", "mode": "convert", "logo": ""})
         self.assertTrue(rows["200"]["on_air"])
         for page in ("/iptv.html", "/iptv.js", "/iptv.css"):
             self.assertEqual(urllib.request.urlopen(self.srv.base + page, timeout=10).status, 200)

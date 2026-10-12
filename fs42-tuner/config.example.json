@@ -3,7 +3,7 @@
   "_db_path": "FieldStation42's own default -- runtime/fs42_fluid.db, relative to its WORKDIR /app -- not a name this project invented. Must match whatever FS42's confs/main_config.json sets if you've overridden it there.",
   "db_path": "/app/runtime/fs42_fluid.db",
   "catalog_root": "/app",
-  "_library_root": "Optional. The content folder the dashboard Library section reads, read-only. Default: <catalog_root>/catalog/by-genre, where the channel generator puts its links.",
+  "_library_root": "Optional. The content folder the Lists & files page's counts read, read-only. Default: <catalog_root>/catalog/by-genre, where the channel generator puts its links.",
   "_channels": "channel number -> FS42 network_name (must match the 'network_name' field in that station's confs/*.json exactly). No Jellyfin/HDHomeRun consumer here, so no external numbering scheme to avoid -- pick whatever numbers you like. The portal sorts and displays them as given.",
   "channels": {
     "801": "PublicDomain",

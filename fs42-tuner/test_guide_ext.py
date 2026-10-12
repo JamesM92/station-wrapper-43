@@ -32,6 +32,8 @@ class ExternalGuide(unittest.TestCase):
         self.assertEqual(sorted(ids), ["fs42.100", "fs42.5"])                       # no second copy of the channel
         titles = [p.find("title").text for p in root.findall("programme") if p.get("channel") == "fs42.100"]
         self.assertEqual(titles, ["Friends", "Seinfeld"])                           # real listings, not "Live: WBXX"
+        icons = [c.find("icon").get("src") for c in root.findall("channel") if c.get("id") == "fs42.100" and c.find("icon") is not None]
+        self.assertEqual(icons, ["http://x/l.png"])                                 # and the station's logo from its guide
         sub = [p.find("sub-title").text for p in root.findall("programme") if p.get("channel") == "fs42.100" and p.find("sub-title") is not None]
         self.assertEqual(sub, ["The Pilot"] if sub else [])
 

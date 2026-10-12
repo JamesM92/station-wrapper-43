@@ -42,13 +42,14 @@ jobs:
 
       - name: Channel generator tests
         run: |
-          pip install defusedxml jsonschema
+          pip install defusedxml jsonschema ffmpeg-python
           python3 scripts/test_build_channels.py
           python3 scripts/test_init.py
           python3 scripts/test_compose.py
           python3 scripts/test_fs42_link.py
           python3 scripts/test_firstrun.py
           python3 scripts/test_pack_short.py
+          python3 scripts/test_dead_links.py
           python3 scripts/test_setup_dirs.py
           (cd fs42-sync && python3 test_sync.py)
           (cd supervisor && python3 test_supervisor.py)

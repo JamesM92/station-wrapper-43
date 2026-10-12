@@ -4,7 +4,8 @@
   const REFRESH_MS = 10 * 1000;
   // Thumbnails are cached in the browser for a minute, matching the server's
   // snapshot reuse, so a refresh doesn't re-request every frame.
-  const THUMB_BUCKET_MS = 60 * 1000;
+  const THUMB_BUCKET_MS = 20 * 1000;          // a watched channel's picture is asked for again this often
+  const GUIDE_BUCKET_MS = 10 * 1000;
 
   const statsEl = document.getElementById("stats");
   const channelsEl = document.getElementById("channels");
@@ -88,11 +89,21 @@
     channelsEl.innerHTML = rows.map((r) => {
       const n = esc(r.channel);
       const now = r.now;
+      // What the tile shows. A channel that is broken, off air or has nothing scheduled shows the test pattern with its
+      // reason. The guide channel is a picture drawn here (no video is read), refreshed every few seconds. Any other
+      // channel gets a snapshot only while somebody is watching it: a snapshot opens a video, which on a network share
+      // is real work, so a channel nobody is watching just says "idle".
       let thumb;
-      if (r.on_air && now && !now.is_stream) {
-        thumb = `<img class="thumb-img" alt="" loading="lazy" src="/thumb/${n}.jpg?b=${bucket}">`;
+      if (r.pattern) {
+        thumb = `<div class="thumb-pattern"><span>${esc(r.pattern)}</span></div>`;
+      } else if (now && now.content_type === "guide") {
+        thumb = `<img class="thumb-img" alt="" src="/thumb/${n}.jpg?b=${Math.floor(Date.now() / GUIDE_BUCKET_MS)}">`;
+      } else if (!r.viewers) {
+        thumb = '<div class="thumb-off">idle</div>';
+      } else if (now && !now.is_stream) {
+        thumb = `<img class="thumb-img" alt="" src="/thumb/${n}.jpg?b=${bucket}">`;
       } else {
-        thumb = `<div class="thumb-off">${r.on_air ? "live stream" : "off air"}</div>`;
+        thumb = '<div class="thumb-off">live stream</div>';
       }
       const pct = now && now.duration ? Math.min(100, (now.elapsed / now.duration) * 100) : 0;
       const badges = [
@@ -108,8 +119,12 @@
             : `<div class="bar"><span style="width:${pct.toFixed(1)}%"></span></div>
            <div class="time">${fmtClock(now.elapsed)} / ${fmtClock(now.duration)}</div>`)
         : `<div class="now dim">Nothing scheduled</div>`;
+      // the channel's logo in the corner of its picture: our own channels draw one from their name (or use the one set on the
+      // station); an external source's channel shows the one its source gives it, and none when it has none
+      const logoSrc = r.external ? (r.external.logo || "") : `/logo/${n}.png`;
+      const logo = logoSrc ? `<img class="chan-logo" alt="" loading="lazy" referrerpolicy="no-referrer" src="${esc(logoSrc)}">` : "";
       return `<a class="card-chan" href="/watch.html?ch=${n}">
-        <div class="thumb">${thumb}</div>
+        <div class="thumb">${thumb}${logo}</div>
         <div class="meta">
           <div class="head"><span class="num">${n}</span><span class="name">${esc(r.station)}</span></div>
           <div class="badges">${badges}</div>
@@ -118,6 +133,7 @@
       </a>`;
     }).join("");
 
+    channelsEl.querySelectorAll(".chan-logo").forEach((img) => img.addEventListener("error", () => img.remove()));
     channelsEl.querySelectorAll(".thumb-img").forEach((img) => {
       img.addEventListener("error", () => {
         const off = document.createElement("div");
@@ -143,60 +159,6 @@
       statusEl.classList.add("error");
     }
   }
-
-  // Library: the content folder by tag. Read once, then every few minutes, since
-  // it only changes when the generator or you add links. Open tags stay open.
-  const libEl = document.getElementById("library");
-  const libSummaryEl = document.getElementById("lib-summary");
-  const libOpen = new Set();
-
-  function renderLibrary(lib) {
-    if (!lib.found) {
-      libSummaryEl.textContent = "";
-      libSummaryEl.classList.remove("warn");
-      libEl.innerHTML = `<p class="lib-empty">No content folder at ${esc(lib.root)}. Run the channel generator, or put videos in tag folders there.</p>`;
-      return;
-    }
-    const t = lib.totals;
-    const warns = [];
-    if (t.dead) warns.push(`${t.dead} dead link${t.dead === 1 ? "" : "s"}`);
-    if (t.duplicates) warns.push(`${t.duplicates} duplicate${t.duplicates === 1 ? "" : "s"}`);
-    libSummaryEl.textContent = `${t.videos} videos in ${lib.tags.length} tags` + (warns.length ? ` \u2014 ${warns.join(", ")}` : "");
-    libSummaryEl.classList.toggle("warn", warns.length > 0);
-    libEl.innerHTML = lib.tags.map((tag) => {
-      const badges = [
-        tag.dead ? `<span class="badge warn" title="Links whose file is gone, as seen from this container">${tag.dead} dead</span>` : "",
-        tag.duplicates ? `<span class="badge warn" title="The same file linked more than once in this tag; FieldStation42 would schedule it twice">${tag.duplicates} duplicate</span>` : "",
-      ].join("");
-      const items = tag.sources.map((s) => `<li><span>${esc(s.name)}</span><span>${s.videos}</span></li>`).join("");
-      return `<details class="lib-tag" data-tag="${esc(tag.tag)}"${libOpen.has(tag.tag) ? " open" : ""}>
-        <summary><span class="lib-name">${esc(tag.tag)}</span><span class="lib-count">${tag.videos} videos</span>${badges}</summary>
-        <ul>${items || '<li class="lib-empty">empty</li>'}</ul>
-      </details>`;
-    }).join("") || '<p class="lib-empty">The content folder is empty.</p>';
-    libEl.querySelectorAll("details").forEach((d) => d.addEventListener("toggle", () => {
-      if (d.open) libOpen.add(d.dataset.tag); else libOpen.delete(d.dataset.tag);
-    }));
-  }
-
-  async function loadLibrary(rescan) {
-    try {
-      const r = await fetch(rescan ? "/library.json?refresh" : "/library.json");
-      if (!r.ok) throw new Error(r.status);
-      const data = await r.json();
-      if (data.never) {                                       // the server has not finished its first scan yet
-        libSummaryEl.textContent = "Waiting for the first scan of your lists…";
-        setTimeout(() => loadLibrary(false), 10000);
-        return;
-      }
-      renderLibrary(data);
-      if (data.scanning) setTimeout(() => loadLibrary(false), 5000);   // a rescan you asked for is running
-    } catch (e) {
-      libSummaryEl.textContent = "Library unavailable";
-      libSummaryEl.classList.add("warn");
-    }
-  }
-  document.getElementById("lib-rescan").addEventListener("click", () => loadLibrary(true));
 
   // ---- getting started: what is done and what is next, until the first channel is on air
   const setupEl = document.getElementById("setup");
@@ -265,6 +227,4 @@
 
   refresh();
   setInterval(refresh, REFRESH_MS);
-  loadLibrary(false);
-  setInterval(() => loadLibrary(false), 5 * 60 * 1000);
 })();

@@ -120,6 +120,42 @@ def patch_reset_sequences(manager_class):
     return True
 
 
+def patch_dead_links(processor_class):
+    """FieldStation42 reads the size and date of every file in a station's list with os.stat, which follows a link: a link whose
+    video has been moved or deleted ("No such file or directory: .../Season04/star.mkv") stopped the whole catalog rebuild,
+    after it had already deleted the station's schedule. A link that leads nowhere has nothing to play, so it is left out of
+    the scan (and said once) and the rebuild goes on with the rest. Returns True when wrapped."""
+    original = processor_class.rich_find_media
+    if getattr(original, "_wrapper_tolerant", False):
+        return True
+
+    def tolerant(path, media_filter="video", *args, **kwargs):
+        try:
+            return original(path, media_filter, *args, **kwargs)
+        except OSError:
+            pass                                             # a dead link somewhere: do it again, leaving those out
+        from fs42.fluid_objects import FileRepoEntry
+        found, dead = [], []
+        for fp in processor_class._rfind_media(path, media_filter):
+            try:
+                st = os.stat(fp)
+            except OSError:
+                dead.append(fp)
+                continue
+            entry = FileRepoEntry()
+            entry.path = os.path.realpath(fp)
+            entry.last_mod = st.st_mtime
+            entry.size = st.st_size
+            found.append(entry)
+        if dead:
+            print(f"console: {len(dead)} link(s) in {path} lead nowhere and were left out of the catalog, e.g. {dead[0]}", flush=True)
+        return found
+
+    tolerant._wrapper_tolerant = True
+    processor_class.rich_find_media = staticmethod(tolerant)
+    return True
+
+
 def main(argv):
     app = os.getcwd()
     if app not in sys.path:
@@ -136,6 +172,12 @@ def main(argv):
         print("console: a rebuild goes on past a scheduled block whose video is no longer in the catalog", flush=True)
     except Exception as e:
         print(f"console: could not apply the rebuild guard ({e}); a block with no video can stop a rebuild", flush=True)
+    try:
+        from fs42.media_processor import MediaProcessor
+        patch_dead_links(MediaProcessor)
+        print("console: a link to a video that is gone is left out of a catalog rebuild", flush=True)
+    except Exception as e:
+        print(f"console: could not apply the dead link guard ({e}); a dead link can stop a rebuild", flush=True)
     try:
         from fs42.catalog import ShowCatalog
         patch_mid_cards(ShowCatalog)

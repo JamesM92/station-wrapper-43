@@ -192,6 +192,14 @@ class GuideBuilder:
                 if target and target in lineup_ids:
                     el.set("channel", target)
                     have.add(target)
+            by_id = {el.get("id"): el for el in channels}
+            for source_id, target_id in retag.items():          # its logo comes with its listings: keep it on our channel
+                source_el, target_el = by_id.get(source_id), by_id.get(target_id)
+                if source_el is None or target_el is None or target_el.find("icon") is not None:
+                    continue
+                icon = source_el.find("icon")
+                if icon is not None and icon.get("src"):
+                    ET.SubElement(target_el, "icon", {"src": icon.get("src")})
             channels = [el for el in channels if el.get("id") not in retag]
             programmes = [el for el in programmes if not (el in fs42_programmes and el.get("channel") in have)]
 

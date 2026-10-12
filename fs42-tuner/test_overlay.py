@@ -120,5 +120,47 @@ class PrimeTest(unittest.TestCase):
         self.assertEqual(got, 5000 * 1316)                    # all of it, nothing lost
 
 
+class DashboardTileTest(unittest.TestCase):
+    class Entry:
+        def __init__(self, path, kind="feature", stream=False):
+            self.path, self.content_type, self.is_stream = path, kind, stream
+
+    class Cur:
+        def __init__(self, entry, title="Show"):
+            self.entry, self.block_title = entry, title
+
+    class Chan:
+        def __init__(self, now_playing="--", subs=()):
+            self.station, self.now_playing, self.subs = "S", now_playing, set(subs)
+
+    def test_what_makes_a_channel_show_the_test_pattern(self):
+        c = self.Chan()
+        self.assertEqual(tuner.pattern_reason(c, None), "NO PROGRAMMING")                     # nothing scheduled
+        gone = self.Cur(self.Entry("/nowhere/at/all/x.mp4"))
+        self.assertTrue(tuner.pattern_reason(c, gone).startswith("NO FILE: x.mp4"))
+        here = tempfile.mkdtemp()
+        open(os.path.join(here, "ok.mp4"), "w").close()
+        self.assertIsNone(tuner.pattern_reason(c, self.Cur(self.Entry(os.path.join(here, "ok.mp4")))))
+        self.assertEqual(tuner.pattern_reason(c, self.Cur(self.Entry(os.path.join(here, "ok.mp4"), "off_air"))),
+                         "OFF AIR: NOTHING SCHEDULED")
+        self.assertEqual(tuner.pattern_reason(self.Chan("Test pattern: bad file"), self.Cur(self.Entry(os.path.join(here, "ok.mp4")))),
+                         "BAD FILE")
+
+    def test_no_video_is_opened_for_a_snapshot_of_a_channel_nobody_watches(self):
+        tuner.CHANS["77"] = tuner.Channel("77", "NobodyWatches", tuner.EncoderPool(2))
+        try:
+            called = []
+            real = tuner._grab_frame
+            tuner._grab_frame = lambda station: called.append(station) or b"jpg"
+            self.assertIsNone(tuner.thumbnail("77"))
+            self.assertEqual(called, [])
+            tuner.CHANS["77"].subs.add(object())                                              # somebody tunes in
+            self.assertEqual(tuner.thumbnail("77"), b"jpg")
+            self.assertEqual(called, ["NobodyWatches"])
+        finally:
+            tuner._grab_frame = real
+            del tuner.CHANS["77"]
+
+
 if __name__ == "__main__":
     unittest.main()
