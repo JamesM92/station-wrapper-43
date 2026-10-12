@@ -54,7 +54,9 @@
       if (i < 0) continue;
       const m = lines[i].match(/([\d:.,]+)\s*-->\s*([\d:.,]+)/);
       if (!m) continue;
-      const body = lines.slice(i + 1).join("\n").replace(/<[^>]+>/g, "").replace(/\{\\[^}]*\}/g, "").replace(/&(amp|lt|gt|nbsp);/g, (m, e) => ({ amp: "&", lt: "<", gt: ">", nbsp: " " })[e]).trim();   // one pass: no entity is decoded twice
+      let body = lines.slice(i + 1).join("\n");
+      for (let prev = null; prev !== body;) { prev = body; body = body.replace(/<[^>]*>/g, "").replace(/\{\\[^}]*\}/g, ""); }   // until no tag is left, nested or not
+      body = body.replace(/&(amp|lt|gt|nbsp);/g, (m, e) => ({ amp: "&", lt: "<", gt: ">", nbsp: " " })[e]).trim();   // one pass: no entity is decoded twice (shown with textContent)
       if (body) cues.push({ from: secs(m[1]), to: secs(m[2]), text: body });
     }
     return cues.sort((a, b) => a.from - b.from);
