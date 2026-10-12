@@ -103,7 +103,7 @@ Workflows live in `.github/workflows/` and need a runner labeled `ubuntu-latest`
 | `upstream-compat.yml` | weekly, and on demand | fetches upstream FieldStation42's latest commit into a scratch folder and runs the contract check against it; it never changes the vendored copy |
 | `codeql.yml` | GitHub only | GitHub code scanning |
 
-Developer checks that need Docker: `scripts/e2e-breaks.py` (the break settings against the real engine), `scripts/e2e-seasons.py`, and `scripts/make-screenshots.py` (the pictures in `docs/images`). `scripts/preflight.sh` runs the CI checks and a throwaway image build before a push.
+Developer checks that need Docker: `scripts/e2e-breaks.py` (the break settings against the real engine), and `scripts/e2e-seasons.py`. `scripts/preflight.sh` runs the CI checks and a throwaway image build before a push.
 
 The image: `ghcr.io/jamesm92/station-wrapper-43` (one image, whatever you switch on); `FS42_TAG` picks `dev` (default), `dev-<short-sha>`, or a release version. Setup, once: no secret is needed: the workflow uses GitHub's own token.
 

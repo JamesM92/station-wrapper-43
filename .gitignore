@@ -15,4 +15,5 @@ fieldstation42/src/docs/off_air_pattern.mp4
 
 # a local script and folder for getting test videos: not part of the project
 scripts/fetch-demo-media.py
+scripts/make-screenshots.py   # makes the README pictures: a local tool
 demo-media/
