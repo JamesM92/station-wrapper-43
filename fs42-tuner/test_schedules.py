@@ -60,6 +60,36 @@ class ValidateTest(unittest.TestCase):
         self.assertEqual(c["events"], [])
         self.assertTrue(sc.is_plain(c))
 
+    # ---- a slot drawn across days: one piece per day, one shared id, one set of settings
+    def spanned(self, lists_sat=("B",)):
+        d = plain()
+        d["default"]["friday"] = {"videos": [{"from": 0, "to": 18, "lists": ["Base"]}, {"from": 18, "to": 24, "lists": ["B"], "span": "s1"}], "commercials": []}
+        d["default"]["saturday"] = {"videos": [{"from": 0, "to": 6, "lists": list(lists_sat), "span": "s1"}, {"from": 6, "to": 24, "lists": ["Base"]}], "commercials": []}
+        return d
+
+    def test_a_slot_across_days_is_kept(self):
+        c = sc.validate(self.spanned())
+        self.assertEqual(c["default"]["friday"]["videos"][1]["span"], "s1")
+        self.assertEqual(c["default"]["saturday"]["videos"][0]["span"], "s1")
+
+    def test_a_slot_across_days_must_say_the_same_on_each_day(self):
+        self.bad(self.spanned(("C",)), "different settings on Friday and Saturday")
+
+    def test_two_pieces_of_a_slot_on_one_day_are_refused(self):
+        d = self.spanned()
+        d["default"]["friday"]["videos"][0]["span"] = "s1"
+        d["default"]["friday"]["videos"][0]["lists"] = ["B"]
+        self.bad(d, "two pieces of the same slot")
+
+    def test_a_link_must_be_a_plain_id(self):
+        d = self.spanned()
+        d["default"]["friday"]["videos"][1]["span"] = "a b/c"
+        self.bad(d, "link to other days that is not valid")
+
+    def test_the_link_is_not_part_of_the_station_config(self):
+        parts = sc.conf_parts(sc.validate(self.spanned()), date(2026, 7, 17))        # a Friday
+        self.assertNotIn("span", str(parts))
+
     def test_a_week_may_leave_time_unassigned_it_plays_the_test_pattern(self):
         d = plain()
         d["default"]["tuesday"] = day((0, 12, ["A"]))                  # nothing after noon: off air, the test pattern

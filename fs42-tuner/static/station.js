@@ -473,7 +473,13 @@
     box.replaceChildren();
     if (!s) return;
     const b = s.block;
-    box.append(el("strong", { textContent: `${CalendarOps.clock(b.from)} – ${CalendarOps.clock(b.to)}` + (s.key === "every" ? "" : `, ${cap(s.key)}`) }));
+    const reach = cal.selectedSpan();
+    if (reach) {
+      box.append(el("strong", { textContent: `${cap(reach.from.key)} ${CalendarOps.clock(reach.from.h)} – ${cap(reach.to.key)} ${CalendarOps.clock(reach.to.h)}` }),
+        el("span", { className: "dim", textContent: `One slot across ${reach.days} days: what you choose here is the same on every day of it. Drag its first or last edge to change when it starts or ends.` }));
+    } else {
+      box.append(el("strong", { textContent: `${CalendarOps.clock(b.from)} – ${CalendarOps.clock(b.to)}` + (s.key === "every" ? "" : `, ${cap(s.key)}`) }));
+    }
     if (state.layer === "videos") {
       box.append(el("span", { className: "dim", textContent: "Plays from these (one is picked at random each time). Lists are folders like any other: open one, or a series, a season or a folder of your media, and add it or one video:" }),
         chooser({ selected: b.lists, multi: true, pool: state.playable, onChange: (lists) => { state.lastLists = lists; cal.update((x) => { x.lists = lists; }); } }));
@@ -509,7 +515,8 @@
     }
     const row = el("div", { className: "row" });
     const btn = (label, cls, fn) => { const x = el("button", { type: "button", className: "btn " + cls, textContent: label }); x.addEventListener("click", fn); return x; };
-    row.append(btn("Delete", "danger", () => cal.removeSelected()), btn("Copy", "", () => cal.copySelected()));
+    row.append(btn(reach ? "Delete all days" : "Delete", "danger", () => cal.removeSelected()), btn("Copy", "", () => cal.copySelected()));
+    if (reach) row.append(btn("Split into separate days", "", () => cal.unlink()));
     const v = view();
     if (v && v.columns.length > 1) {
       row.append(el("span", { className: "dim", textContent: "Same time on:" }));
@@ -534,7 +541,7 @@
 
   function renderLayerNote() {
     const note = $("layer-note");
-    if (state.layer === "videos") note.textContent = "Times snap to half hours. A slot that starts or ends at half past can hold only one list.";
+    if (state.layer === "videos") note.textContent = "Times snap to half hours. A slot that starts or ends at half past can hold only one list. Drag from one day to another to make one slot that runs across days, with the same lists, cards and captions on each.";
     else if (state.layer === "cards") note.textContent = "Mid cards for a time period, by the hour: the list played at the start of a break and the one at its end (they can be the same). A video slot with cards of its own (choose it on the Videos tab) uses those; hours you leave empty use the station's own two lists (below)" +
       ($("f-cards").checked ? "." : ", which are switched off: those hours have no cards, and a block you draw here turns cards on for its hours.");
     else note.textContent = "Commercials are chosen by the hour, for the hours that have videos. Hours you leave empty use the station's own commercial list (below)" +

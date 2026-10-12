@@ -101,6 +101,10 @@ def _videos(blocks, full, where):
             blk["end"] = _list_name(b.get("end") or start, where)
         if b.get("burn") not in (None, "", False):          # captions drawn on the picture while this block plays
             blk["burn"] = True
+        if b.get("span") not in (None, ""):                 # one slot drawn across days: its pieces share this id
+            if not isinstance(b["span"], str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,24}", b["span"]):
+                raise ScheduleError(f"{where}: block {i} has a link to other days that is not valid")
+            blk["span"] = b["span"]
         out.append(blk)
     out.sort(key=lambda b: b["from"])
     for a, b in zip(out, out[1:]):
@@ -223,7 +227,26 @@ def _day(day, full, where):
 def _week(week, full, where):
     if not isinstance(week, dict) or set(week) != set(DAYS):
         raise ScheduleError(f"{where}: a week needs all seven days")
-    return {d: _day(week[d], full, f"{where}, {d.capitalize()}") for d in DAYS}
+    out = {d: _day(week[d], full, f"{where}, {d.capitalize()}") for d in DAYS}
+    _spans(out, where)
+    return out
+
+
+def _spans(week, where):
+    """A slot drawn across days is one piece on each day with a shared `span` id. The pieces must say the same thing
+    (lists, cards, captions) and there is at most one on a day: that is what makes it one slot."""
+    seen = {}
+    for d in DAYS:
+        for b in week[d]["videos"]:
+            sid = b.get("span")
+            if not sid:
+                continue
+            same = {k: b.get(k) for k in ("lists", "start", "end", "burn")}
+            if sid in seen and seen[sid][0] == d:
+                raise ScheduleError(f"{where}: {d.capitalize()} has two pieces of the same slot that runs across days")
+            if sid in seen and seen[sid][1] != same:
+                raise ScheduleError(f"{where}: the slot that runs across days has different settings on {seen[sid][0].capitalize()} and {d.capitalize()}")
+            seen.setdefault(sid, (d, same))
 
 
 def _md(text, where):

@@ -95,9 +95,75 @@
     return null;
   }
 
+  // ---- slots that run across days. Each day keeps its own piece (the saved schedule is per day); the pieces of one
+  // slot share a `span` id, so they are edited, moved to the next day's settings and removed together. `days` is
+  // {key: blocks}, `order` the keys in the order the days follow each other.
+  const newSpan = () => Math.random().toString(36).slice(2, 10);
+
+  // One slot from (day index c0, hour h0) to (day index c1, hour h1): the rest of the first day, whole days between, and
+  // the start of the last, painted over what is there. A single day is an ordinary slot (no span id).
+  function paintSpan(days, order, c0, h0, c1, h1, payload, id) {
+    const out = clone(days);
+    if (c0 === c1) { out[order[c0]] = paint(out[order[c0]] || [], h0, h1, payload); return out; }
+    id = id || newSpan();
+    for (let c = c0; c <= c1; c++) {
+      const k = order[c];
+      out[k] = paint(out[k] || [], c === c0 ? h0 : 0, c === c1 ? h1 : 24, { ...payload, span: id });
+    }
+    return out;
+  }
+
+  // Where a slot's pieces are: [{key, i}] in day order, then time.
+  function spanPieces(days, order, id) {
+    const out = [];
+    order.forEach((k) => (days[k] || []).forEach((b, i) => { if (b.span === id) out.push({ key: k, i, block: b }); }));
+    return out;
+  }
+
+  // A span id that only one piece still carries (the others were painted over or removed) is an ordinary slot again.
+  function cleanSpans(days) {
+    const out = clone(days), count = {};
+    for (const k of Object.keys(out)) for (const b of out[k] || []) if (b.span) count[b.span] = (count[b.span] || 0) + 1;
+    for (const k of Object.keys(out)) {
+      out[k] = tidy((out[k] || []).map((b) => { if (b.span && count[b.span] < 2) { const { span, ...r } = b; return r; } return b; }));
+    }
+    return out;
+  }
+
+  // Change every piece of a slot (its lists, cards, captions) in one go.
+  function updateSpan(days, id, fn) {
+    const out = clone(days);
+    for (const k of Object.keys(out)) for (const b of out[k] || []) if (b.span === id) fn(b);
+    return out;
+  }
+
+  // Take every piece of a slot out. On a full day each hole is closed like any removal.
+  function removeSpan(days, id, full) {
+    const out = clone(days);
+    for (const k of Object.keys(out)) {
+      let i;
+      while ((i = (out[k] || []).findIndex((b) => b.span === id)) >= 0) out[k] = remove(out[k], i, full);
+    }
+    return out;
+  }
+
+  // The pieces become separate slots on their days.
+  function unlinkSpan(days, id) { return updateSpan(days, id, (b) => { delete b.span; }); }
+
+  // A block without its span id: what Copy / paste carries (a pasted piece is a slot of its own).
+  function plain(b) { const { span, ...r } = clone(b); return r; }
+
+  // The first and last piece of a slot: {from: {key, h}, to: {key, h}, days: n}.
+  function spanBounds(days, order, id) {
+    const p = spanPieces(days, order, id);
+    if (!p.length) return null;
+    const a = p[0], z = p[p.length - 1];
+    return { from: { key: a.key, h: a.block.from }, to: { key: z.key, h: z.block.to }, days: p.length };
+  }
+
   function clock(h) { return `${String(Math.floor(h)).padStart(2, "0")}:${h % 1 ? "30" : "00"}`; }
 
-  root.CalendarOps = { paint, remove, resize, place, tidy, problem, clock };
+  root.CalendarOps = { paint, remove, resize, place, tidy, problem, clock, paintSpan, spanPieces, cleanSpans, updateSpan, removeSpan, unlinkSpan, plain, spanBounds, newSpan };
 
   // ---- the grid (browser only)
   if (typeof document === "undefined") return;
@@ -126,6 +192,15 @@
     const blocksOf = (key) => { const d = opts.getDay(key); return d[opts.layer()] || (d[opts.layer()] = []); };   // a saved schedule from before mid cards has no "cards"
     const setBlocks = (key, blocks) => { opts.getDay(key)[opts.layer()] = blocks; };
     const isFull = () => opts.layer() === "videos" && opts.full();
+    const order = () => opts.columns.map((c) => c.key);
+    const spanOn = () => opts.layer() === "videos" && opts.columns.length > 1;      // a slot may run across days
+    const daysMap = () => Object.fromEntries(order().map((k) => [k, blocksOf(k)]));
+    const applyDays = (map) => { for (const k of order()) setBlocks(k, map[k] || []); };
+    // a slot left with one piece (the rest were drawn over or removed) is an ordinary slot again
+    const settle = () => {
+      const now = daysMap(), clean = CalendarOps.cleanSpans(now);
+      if (JSON.stringify(clean) !== JSON.stringify(now)) applyDays(clean);
+    };
     let drag = null;
 
     function render() {
@@ -170,7 +245,19 @@
       e.append(el("span", { className: "cal-text", textContent: text(b) }), el("span", { className: "cal-time", textContent: `${clock(b.from)}–${clock(b.to)}` }));
       e.title = `${text(b)}  ${clock(b.from)}–${clock(b.to)}`;
       if (b.to - b.from <= 0.5) e.classList.add("short");          // a half hour is one line: the name, then the time
-      for (const edge of ["from", "to"]) {
+      // a piece of a slot that runs across days: only its outer ends can be dragged (the join at midnight is fixed),
+      // and it is selected, not moved (Split it to move the days one at a time)
+      let edges = ["from", "to"];
+      if (b.span) {
+        const pieces = CalendarOps.spanPieces(daysMap(), order(), b.span);
+        const at = pieces.findIndex((p) => p.block === b);
+        e.classList.add("span");
+        if (at > 0) { edges = edges.filter((x) => x !== "from"); e.classList.add("span-cont"); }
+        if (at >= 0 && at < pieces.length - 1) { edges = edges.filter((x) => x !== "to"); e.classList.add("span-more"); }
+        const bounds = CalendarOps.spanBounds(daysMap(), order(), b.span);
+        if (bounds) e.title += `\nOne slot across ${bounds.days} days: ${bounds.from.key} ${clock(bounds.from.h)} to ${bounds.to.key} ${clock(bounds.to.h)}`;
+      }
+      for (const edge of edges) {
         const h = el("div", { className: `cal-handle ${edge}` });
         h.addEventListener("pointerdown", (ev) => { ev.stopPropagation(); startResize(ev, key, i, edge); });
         e.append(h);
@@ -178,6 +265,7 @@
       e.addEventListener("pointerdown", (ev) => {              // the body of a slot: a click selects it, a drag moves it
         if (ev.button !== 0 || ev.target.classList.contains("cal-handle")) return;
         ev.stopPropagation();
+        if (b.span) { select(key, i); return; }
         startMove(ev, key, i, e);
       });
       e.dataset.i = i;
@@ -197,10 +285,8 @@
 
     function down(ev, key, colEl) {
       if (ev.button !== 0 || ev.target.classList.contains("cal-handle")) return;
-      drag = { type: "create", key, colEl, c0: cellAt(colEl, ev), c1: cellAt(colEl, ev), moved: false };
-      const ghost = el("div", { className: "cal-block drawing" });
-      colEl.append(ghost);
-      drag.ghost = ghost;
+      const ci = order().indexOf(key);
+      drag = { type: "create", key, colEl, c0: cellAt(colEl, ev), c1: cellAt(colEl, ev), ci0: ci, ci1: ci, moved: false };
       showGhost();
       listen();
     }
@@ -254,11 +340,27 @@
       col.append(ghost);
     }
 
+    // the slot being drawn as a ghost on each day it covers: (day, cell) of the start and the end, in either order
+    function ghostSpan(d) {
+      let [ca, cb, ia, ib] = [d.c0, d.c1, d.ci0, d.ci1];
+      if (ib < ia || (ib === ia && cb < ca)) [ca, cb, ia, ib] = [cb, ca, ib, ia];
+      return { ca, cb, ia, ib };
+    }
     function showGhost() {
-      const [a, b] = hoursOf(drag.c0, drag.c1);
-      drag.ghost.style.top = `${a * 2 * ROW}px`;
-      drag.ghost.style.height = `${(b - a) * 2 * ROW}px`;
-      drag.ghost.textContent = `${clock(a)}–${clock(b)}`;
+      for (const g of opts.host.querySelectorAll(".cal-block.drawing")) g.remove();
+      const { ca, cb, ia, ib } = ghostSpan(drag);
+      const u = unit();
+      const startH = Math.floor(ca / 2 / u) * u;
+      const endH = ia === ib ? Math.min(24, Math.max(startH + u, Math.ceil((cb + 1) / 2 / u) * u)) : Math.ceil((cb + 1) / 2 / u) * u;
+      for (let c = ia; c <= ib; c++) {
+        const col = opts.host.querySelector(`.cal-col[data-key="${order()[c]}"]`);
+        if (!col) continue;
+        const a = c === ia ? startH : 0, z = c === ib ? endH : 24;
+        const g = el("div", { className: "cal-block drawing", textContent: c === ia ? (ia === ib ? `${clock(a)}–${clock(z)}` : `from ${clock(a)}`) : (c === ib ? `to ${clock(z)}` : "") });
+        g.style.top = `${a * 2 * ROW}px`;
+        g.style.height = `${(z - a) * 2 * ROW}px`;
+        col.append(g);
+      }
     }
 
     function move(ev) {
@@ -274,16 +376,22 @@
         showMove();
         return;
       }
-      const c = cellAt(drag.colEl, ev);
       if (drag.type === "create") {
-        if (c !== drag.c1) { drag.c1 = c; drag.moved = drag.moved || c !== drag.c0; showGhost(); }
-      } else {
-        const t = Math.round(((ev.clientY - drag.colEl.getBoundingClientRect().top) / ROW / 2) / unit()) * unit();
-        const out = CalendarOps.resize(drag.blocks, drag.i, drag.edge, Math.min(24, Math.max(0, t)), isFull(), unit());
-        setBlocks(drag.key, out);
-        render();
-        drag.colEl = opts.host.querySelector(`.cal-col[data-key="${drag.key}"]`);
+        const col = spanOn() ? columnAt(ev) : null;                 // the pointer may be over another day: the slot runs across
+        const ci = col ? order().indexOf(col.dataset.key) : drag.ci1;
+        const c = cellAt(col || drag.colEl, ev);
+        if (c !== drag.c1 || ci !== drag.ci1) {
+          drag.c1 = c; drag.ci1 = ci;
+          drag.moved = drag.moved || c !== drag.c0 || ci !== drag.ci0;
+          showGhost();
+        }
+        return;
       }
+      const t = Math.round(((ev.clientY - drag.colEl.getBoundingClientRect().top) / ROW / 2) / unit()) * unit();
+      const out = CalendarOps.resize(drag.blocks, drag.i, drag.edge, Math.min(24, Math.max(0, t)), isFull(), unit());
+      setBlocks(drag.key, out);
+      render();
+      drag.colEl = opts.host.querySelector(`.cal-col[data-key="${drag.key}"]`);
     }
 
     function up() {
@@ -292,6 +400,7 @@
       drag = null;
       unlisten();
       if (d.type === "resize") {
+        settle();
         select(d.key, d.i);
         opts.onChange();
         return;
@@ -303,6 +412,7 @@
         setBlocks(d.key, without);
         const out = CalendarOps.place(blocksOf(d.targetKey), d.block, d.from, unit());
         setBlocks(d.targetKey, out);
+        settle();
         const i = out.findIndex((x) => x.from <= d.from && d.from < x.to);
         cal.sel = { key: d.targetKey, i };
         render();
@@ -310,7 +420,21 @@
         opts.onSelect && opts.onSelect(cal.sel);
         return;
       }
-      d.ghost.remove();
+      for (const g of opts.host.querySelectorAll(".cal-block.drawing")) g.remove();
+      if (d.moved && d.ci0 !== d.ci1 && spanOn()) {             // drawn across days: one slot, a piece on each day
+        const { ca, cb, ia, ib } = ghostSpan(d);
+        const u = unit();
+        const startH = Math.floor(ca / 2 / u) * u;
+        const endH = ia === ib ? Math.min(24, Math.max(startH + u, Math.ceil((cb + 1) / 2 / u) * u)) : Math.ceil((cb + 1) / 2 / u) * u;
+        const out = CalendarOps.cleanSpans(CalendarOps.paintSpan(daysMap(), order(), ia, startH, ib, endH, opts.defaults()));
+        applyDays(out);
+        const i = blocksOf(order()[ia]).findIndex((x) => x.from <= startH && startH < x.to);
+        cal.sel = { key: order()[ia], i };
+        render();
+        opts.onChange();
+        opts.onSelect && opts.onSelect(cal.sel);
+        return;
+      }
       const blocks = blocksOf(d.key);
       if (!d.moved) {                            // a click: select the slot under it, or make one on empty space
         const h = d.c0 / 2;
@@ -321,6 +445,7 @@
       const [a, b] = d.moved ? hoursOf(d.c0, d.c1) : [start, start + 1];       // a click makes a one hour slot
       const out = CalendarOps.paint(blocks, a, Math.min(24, b), opts.defaults());
       setBlocks(d.key, out);
+      settle();
       const i = out.findIndex((x) => x.from <= a && a < x.to);
       cal.sel = { key: d.key, i };
       render();
@@ -343,7 +468,9 @@
     function removeSelected() {
       const s = selected();
       if (!s) return;
-      setBlocks(s.key, CalendarOps.remove(blocksOf(s.key), s.i, isFull()));
+      if (s.block.span) applyDays(CalendarOps.removeSpan(daysMap(), s.block.span, isFull()));        // every day of it
+      else setBlocks(s.key, CalendarOps.remove(blocksOf(s.key), s.i, isFull()));
+      settle();
       cal.sel = null;
       render();
       opts.onChange();
@@ -353,14 +480,16 @@
     function copySelected() {
       const s = selected();
       if (!s) return;
-      clip.value = { kind: "block", layer: opts.layer(), block: clone(s.block) };
+      clip.value = { kind: "block", layer: opts.layer(), block: CalendarOps.plain(s.block) };
       render();
       opts.onSelect && opts.onSelect(cal.sel, true);
     }
 
     // put the copied block at the same time on these days (key list), writing over what is there
     function pasteBlockOn(keys, block) {
-      for (const k of keys) setBlocks(k, CalendarOps.paint(blocksOf(k), block.from, block.to, rest(block)));
+      const { span, ...one } = block;                       // a slot that runs across days is pasted as a plain one
+      for (const k of keys) setBlocks(k, CalendarOps.paint(blocksOf(k), one.from, one.to, rest(one)));
+      settle();
       render();
       opts.onChange();
     }
@@ -370,9 +499,10 @@
       if (!v) return;
       if (v.kind === "day") {
         const d = opts.getDay(key);
-        d.videos = clone(v.day.videos);
+        d.videos = clone(v.day.videos).map(CalendarOps.plain);       // a slot across days is not carried to another day
         d.commercials = clone(v.day.commercials);
         d.cards = clone(v.day.cards || []);
+        settle();
         cal.sel = null;
         render();
         opts.onChange();
@@ -386,8 +516,8 @@
     function update(fn) {
       const s = selected();
       if (!s) return;
-      fn(s.block);
-      setBlocks(s.key, blocksOf(s.key));
+      if (s.block.span) applyDays(CalendarOps.updateSpan(daysMap(), s.block.span, fn));       // the same on every day of it
+      else { fn(s.block); setBlocks(s.key, blocksOf(s.key)); }
       render();
       opts.onChange();
     }
@@ -412,8 +542,9 @@
       if (v.kind === "day") { pasteInto(key); return; }
       if (v.layer !== opts.layer()) return;
       const at = hover.key ? hover.h : v.block.from;
-      const out = CalendarOps.place(blocksOf(key), v.block, at, unit());
+      const out = CalendarOps.place(blocksOf(key), CalendarOps.plain(v.block), at, unit());
       setBlocks(key, out);
+      settle();
       const start = Math.min(Math.max(Math.round(at / unit()) * unit(), 0), 24 - (v.block.to - v.block.from));
       cal.sel = { key, i: out.findIndex((x) => x.from <= start && start < x.to) };
       render();
@@ -443,7 +574,18 @@
     };
     document.addEventListener("keydown", onKey);
 
-    Object.assign(cal, { render, selected, removeSelected, copySelected, pasteBlockOn, update, clearSelection: () => select(null),
+    // the selected slot's reach when it runs across days: {from: {key, h}, to: {key, h}, days} or null
+    const selectedSpan = () => { const s = selected(); return s && s.block.span ? CalendarOps.spanBounds(daysMap(), order(), s.block.span) : null; };
+    const unlink = () => {
+      const s = selected();
+      if (!s || !s.block.span) return;
+      applyDays(CalendarOps.unlinkSpan(daysMap(), s.block.span));
+      render();
+      opts.onChange();
+      opts.onSelect && opts.onSelect(cal.sel);
+    };
+
+    Object.assign(cal, { render, selected, selectedSpan, unlink, removeSelected, copySelected, pasteBlockOn, update, clearSelection: () => select(null),
       hasClip: () => !!clip.value, clipKind: () => (clip.value ? clip.value.kind : null) });
     return cal;
   }

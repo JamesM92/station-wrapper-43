@@ -104,5 +104,58 @@ class OpsTest(unittest.TestCase):
         self.assertEqual(out, [{"from": 8, "to": 10, "list": "Ads"}, {"from": 10, "to": 14, "list": "Ads2"}])
 
 
+@unittest.skipUnless(NODE, "needs Node")
+class SpanTest(unittest.TestCase):
+    ORDER = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+
+    def week(self):
+        return {d: [V(0, 24, "A")] for d in self.ORDER}
+
+    def test_a_slot_drawn_across_days_is_a_piece_on_each(self):
+        out = ops(f"O.paintSpan({json.dumps(self.week())}, {json.dumps(self.ORDER)}, 4, 18, 6, 6, {{lists: ['B']}}, 's1')")
+        self.assertEqual(out["friday"], [V(0, 18, "A"), {**V(18, 24, "B"), "span": "s1"}])
+        self.assertEqual(out["saturday"], [{**V(0, 24, "B"), "span": "s1"}])
+        self.assertEqual(out["sunday"], [{**V(0, 6, "B"), "span": "s1"}, V(6, 24, "A")])
+        self.assertEqual(out["monday"], [V(0, 24, "A")])
+
+    def test_one_day_is_an_ordinary_slot(self):
+        out = ops(f"O.paintSpan({json.dumps(self.week())}, {json.dumps(self.ORDER)}, 2, 8, 2, 10, {{lists: ['B']}}, 's1')")
+        self.assertTrue(all("span" not in b for b in out["wednesday"]))
+
+    def test_settings_change_on_every_piece(self):
+        w = ops(f"O.paintSpan({json.dumps(self.week())}, {json.dumps(self.ORDER)}, 4, 18, 6, 6, {{lists: ['B']}}, 's1')")
+        out = ops(f"O.updateSpan({json.dumps(w)}, 's1', (b) => {{ b.lists = ['C']; b.burn = true; }})")
+        pieces = [b for d in out.values() for b in d if b.get("span") == "s1"]
+        self.assertEqual(len(pieces), 3)
+        self.assertTrue(all(b["lists"] == ["C"] and b["burn"] for b in pieces))
+
+    def test_removing_it_takes_every_day_and_closes_the_holes(self):
+        w = ops(f"O.paintSpan({json.dumps(self.week())}, {json.dumps(self.ORDER)}, 4, 18, 6, 6, {{lists: ['B']}}, 's1')")
+        out = ops(f"O.removeSpan({json.dumps(w)}, 's1', true)")
+        self.assertEqual(out["friday"], [V(0, 24, "A")])
+        self.assertEqual(out["saturday"], [])      # a day with only the slot has nothing left to close the hole with
+        self.assertEqual(out["sunday"], [V(0, 24, "A")])
+
+    def test_a_piece_left_alone_is_an_ordinary_slot_again(self):
+        w = ops(f"O.paintSpan({json.dumps(self.week())}, {json.dumps(self.ORDER)}, 4, 18, 5, 6, {{lists: ['B']}}, 's1')")
+        w["saturday"] = [V(0, 24, "A")]
+        out = ops(f"O.cleanSpans({json.dumps(w)})")
+        self.assertNotIn("span", out["friday"][-1])
+
+    def test_unlink_keeps_the_pieces(self):
+        w = ops(f"O.paintSpan({json.dumps(self.week())}, {json.dumps(self.ORDER)}, 4, 18, 6, 6, {{lists: ['B']}}, 's1')")
+        out = ops(f"O.unlinkSpan({json.dumps(w)}, 's1')")
+        self.assertEqual(out["friday"][-1], V(18, 24, "B"))
+        self.assertEqual(out["sunday"][0], V(0, 6, "B"))
+
+    def test_bounds(self):
+        w = ops(f"O.paintSpan({json.dumps(self.week())}, {json.dumps(self.ORDER)}, 4, 18, 6, 6, {{lists: ['B']}}, 's1')")
+        self.assertEqual(ops(f"O.spanBounds({json.dumps(w)}, {json.dumps(self.ORDER)}, 's1')"),
+                         {"from": {"key": "friday", "h": 18}, "to": {"key": "sunday", "h": 6}, "days": 3})
+
+    def test_plain_drops_the_link(self):
+        self.assertEqual(ops("O.plain({from: 1, to: 2, lists: ['A'], span: 'x'})"), V(1, 2, "A"))
+
+
 if __name__ == "__main__":
     unittest.main()

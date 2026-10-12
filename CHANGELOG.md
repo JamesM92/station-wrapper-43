@@ -30,6 +30,11 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
   duplicate warnings (beside the list they are in) and the **Rescan** button are on the Lists & files page, above the lists.
 
 ### Added
+- **A slot can run across days.** On the calendar's Videos tab, drag from one day to another (Friday 18:00 to Monday 06:00, say) and
+  it is one slot: a piece on each day with the same lists, mid cards and captions, which you change, delete or split in one go.
+  Its first and last edge can be dragged; the joins at midnight stay put, and *Split into separate days* makes the pieces
+  ordinary slots again. It is a calendar convenience, not a longer show: each day is still built on its own, so a video does not
+  carry past midnight.
 - **Even volume.** Shows and commercials are brought to one loudness. Each video is measured once in the background (EBU R128) and a
   fixed gain, with a limiter, is applied when it plays; a video not measured yet plays as it is. The target is set on the Stations
   page (-23 LUFS by default), a station can switch it off, and `LOUDNESS=0` turns it off for the container.
