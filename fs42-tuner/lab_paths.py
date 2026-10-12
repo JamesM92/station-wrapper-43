@@ -1,77 +1,49 @@
-"""Temporary: which path guards the scanner recognises. Not part of the project."""
+"""Temporary: which command-line guards the scanner recognises. Not part of the project."""
 import os
-import pathlib
-import re
+import shlex
+import subprocess
+import tempfile
 from http.server import BaseHTTPRequestHandler
-from urllib.parse import urlparse, unquote
+from urllib.parse import urlparse, urlsplit, quote, parse_qs
 
-ROOT = "/srv/media"
+SCHEMES = {"rtsp": "rtsp", "http": "http", "https": "https"}
 
 
 class H(BaseHTTPRequestHandler):
     def do_GET(self):
-        rel = unquote(urlparse(self.path).path)
-        self.a(rel)
-        self.b(rel)
-        self.c(rel)
-        self.d(rel)
-        self.e(rel)
-        self.f(rel)
-        self.g(rel)
-        self.h(rel)
-        self.i(rel)
+        url = parse_qs(urlparse(self.path).query).get("u", [""])[0]
+        self.j(url)
+        self.k(url)
+        self.l(url)
+        self.m(url)
+        self.o(url)
+        self.p(url)
 
-    def a(self, rel):                      # A: normpath + startswith, raise inline
-        full = os.path.normpath(os.path.join(ROOT, rel))
-        if not full.startswith(ROOT + os.sep):
-            raise ValueError("outside")
-        return open(full, "rb").read()                                    # SINK_A
+    def j(self, url):                        # J: the plain list
+        return subprocess.run(["ffprobe", "-i", url], capture_output=True)                     # CMD_J
 
-    def b(self, rel):                      # B: compound condition
-        full = os.path.normpath(os.path.join(ROOT, rel))
-        if full != ROOT and not full.startswith(ROOT + os.sep):
-            raise ValueError("outside")
-        return open(full, "rb").read()                                    # SINK_B
+    def k(self, url):                        # K: scheme taken from a constant table, rest rebuilt
+        parts = urlsplit(url)
+        scheme = SCHEMES[parts.scheme]
+        rebuilt = scheme + "://" + parts.netloc + parts.path
+        return subprocess.run(["ffprobe", "-i", rebuilt], capture_output=True)                 # CMD_K
 
-    def c(self, rel):                      # C: realpath + startswith
-        full = os.path.realpath(os.path.join(ROOT, rel))
-        if not full.startswith(ROOT + os.sep):
-            raise ValueError("outside")
-        return open(full, "rb").read()                                    # SINK_C
+    def l(self, url):                        # L: the address goes to a file, the file is the argument
+        fd, path = tempfile.mkstemp(suffix=".ffconcat")
+        with os.fdopen(fd, "w") as f:
+            f.write("ffconcat version 1.0\nfile " + quote(url, safe="") + "\n")
+        return subprocess.run(["ffprobe", "-safe", "0", "-f", "concat", "-i", path], capture_output=True)   # CMD_L
 
-    def d(self, rel):                      # D: the guard in a helper that returns the path
-        return open(_within(ROOT, rel), "rb").read()                      # SINK_D
+    def m(self, url):                        # M: shlex.quote in a list
+        return subprocess.run(["ffprobe", "-i", shlex.quote(url)], capture_output=True)       # CMD_M
 
-    def e(self, rel):                      # E: commonpath
-        full = os.path.normpath(os.path.join(ROOT, rel))
-        if os.path.commonpath([full, ROOT]) != ROOT:
-            raise ValueError("outside")
-        return open(full, "rb").read()                                    # SINK_E
+    def o(self, url):                        # O: percent-encoded
+        return subprocess.run(["ffprobe", "-i", quote(url, safe=":/?&=@%")], capture_output=True)   # CMD_O
 
-    def f(self, rel):                      # F: pathlib resolve + is_relative_to
-        full = pathlib.Path(ROOT, rel).resolve()
-        if not full.is_relative_to(ROOT):
-            raise ValueError("outside")
-        return open(full, "rb").read()                                    # SINK_F
-
-    def g(self, rel):                      # G: a whitelist of characters for a single name
-        if not re.fullmatch(r"[A-Za-z0-9 ._()-]+", rel) or rel.startswith("."):
-            raise ValueError("bad name")
-        return open(os.path.join(ROOT, rel), "rb").read()                 # SINK_G
-
-    def h(self, rel):                      # H: the name must be an entry that listdir shows (lookup, not use)
-        names = os.listdir(ROOT)
-        if rel not in names:
-            raise ValueError("no such")
-        return open(os.path.join(ROOT, rel), "rb").read()                 # SINK_H
-
-    def i(self, rel):                      # I: os.path.basename, one level only
-        name = os.path.basename(rel)
-        return open(os.path.join(ROOT, name), "rb").read()                # SINK_I
-
-
-def _within(base, rel):
-    full = os.path.normpath(os.path.join(base, rel))
-    if not full.startswith(base + os.sep):
-        raise ValueError("outside")
-    return full
+    def p(self, url):                        # P: only the part after a constant scheme prefix is user data, checked against a character set
+        if not url.startswith("rtsp://"):
+            raise ValueError("scheme")
+        tail = url[len("rtsp://"):]
+        if not all(c.isalnum() or c in "-._:@/?=&%" for c in tail):
+            raise ValueError("characters")
+        return subprocess.run(["ffprobe", "-i", "rtsp://" + tail], capture_output=True)       # CMD_P
