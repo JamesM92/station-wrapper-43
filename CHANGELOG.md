@@ -30,6 +30,13 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
   duplicate warnings (beside the list they are in) and the **Rescan** button are on the Lists & files page, above the lists.
 
 ### Added
+- **Premiere nights.** Mark one block of a show's slot (on the Videos tab: select it and tick *New episodes premiere in this slot*,
+  say Friday's 8 pm) and choose where the show's new episodes start (a season, a folder or an episode). Each time that slot comes
+  round it plays the next new episode; the show's other airings play the older episodes in order and loop, now including the ones
+  already premiered. When there is no new episode left the premiere night carries on with the loop, and with nothing premiered
+  yet the show simply plays from its first episode. It is worked out from the date, so a rebuilt schedule agrees with itself:
+  the config names a hidden folder per premiere (`.new.<show>.<n>`) and one for the loop (`.loop.<show>`), which the keeper
+  makes and adds to the catalog as the nights come into range.
 - **A slot can run across days.** On the calendar's Videos tab, drag from one day to another (Friday 18:00 to Monday 06:00, say) and
   it is one slot: a piece on each day with the same lists, mid cards and captions, which you change, delete or split in one go.
   Its first and last edge can be dragged; the joins at midnight stay put, and *Split into separate days* makes the pieces

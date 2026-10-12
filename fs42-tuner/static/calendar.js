@@ -242,8 +242,9 @@
       const e = el("div", { className: "cal-block" + (ghost ? " ghost" : "") + (!ghost && cal.sel && cal.sel.key === key && cal.sel.i === i ? " selected" : ""),
         style: `top:${top}px;height:${height}px;background:${colour(b)}` });
       if (ghost) return e;
-      e.append(el("span", { className: "cal-text", textContent: text(b) }), el("span", { className: "cal-time", textContent: `${clock(b.from)}–${clock(b.to)}` }));
+      e.append(el("span", { className: "cal-text", textContent: (b.premiere ? "★ " : "") + text(b) }), el("span", { className: "cal-time", textContent: `${clock(b.from)}–${clock(b.to)}` }));
       e.title = `${text(b)}  ${clock(b.from)}–${clock(b.to)}`;
+      if (b.premiere) e.classList.add("premiere");
       if (b.to - b.from <= 0.5) e.classList.add("short");          // a half hour is one line: the name, then the time
       // a piece of a slot that runs across days: only its outer ends can be dragged (the join at midnight is fixed),
       // and it is selected, not moved (Split it to move the days one at a time)
@@ -522,6 +523,16 @@
       opts.onChange();
     }
 
+    // change only the selected piece (a setting that belongs to one day of a slot that runs across days)
+    function updateOne(fn) {
+      const s = selected();
+      if (!s) return;
+      fn(s.block);
+      setBlocks(s.key, blocksOf(s.key));
+      render();
+      opts.onChange();
+    }
+
     // where the pointer is over the calendar: a paste with the keyboard goes there
     const hover = { key: null, h: 0 };
     opts.host.addEventListener("pointermove", (ev) => {
@@ -585,7 +596,7 @@
       opts.onSelect && opts.onSelect(cal.sel);
     };
 
-    Object.assign(cal, { render, selected, selectedSpan, unlink, removeSelected, copySelected, pasteBlockOn, update, clearSelection: () => select(null),
+    Object.assign(cal, { render, selected, selectedSpan, unlink, updateOne, removeSelected, copySelected, pasteBlockOn, update, clearSelection: () => select(null),
       hasClip: () => !!clip.value, clipKind: () => (clip.value ? clip.value.kind : null) });
     return cal;
   }

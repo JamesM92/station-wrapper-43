@@ -25,6 +25,16 @@ applies to ITS date, and days already built keep what they were built with.
 FieldStation42's dates have no year, so a one-off event is put in the config only while it is close (within
 LOOKAHEAD days), and the keeper regenerates the config every day. FieldStation42 cannot name 29 February.
 
+Premieres: a show in a slot marked `premiere` airs its NEW episodes there, one each time the slot's day comes round (every
+Friday, say), and plays its OLDER episodes, in order and looping, wherever else it is scheduled:
+
+    "premieres": {"<show list>": {"from": "<where the new episodes start, a folder or file inside the show>", "since": "2026-10-16"}}
+
+The k-th such day since `since` airs the k-th new episode, as a date override that names a folder holding only that
+episode; when there is no new episode left that day plays the loop as usual. The loop is a hidden folder of the older
+episodes plus the ones already premiered (premieres.py makes the folders). It is all a function of the date, so a rebuilt
+or repeated build gives the same answer, and FieldStation42 needs no state of its own for it.
+
 The smallest unit is 30 minutes: an hour can be split into two halves of one list each (tags: [first half, second
 half]); an hour with several lists in one block picks one at random (random_tags). Commercials are per hour
 (`commercial_dir` on the hour's slot).
@@ -101,6 +111,10 @@ def _videos(blocks, full, where):
             blk["end"] = _list_name(b.get("end") or start, where)
         if b.get("burn") not in (None, "", False):          # captions drawn on the picture while this block plays
             blk["burn"] = True
+        if b.get("premiere") not in (None, "", False):      # the new episodes of the show in this block air here
+            if len(clean) != 1:
+                raise ScheduleError(f"{where}: block {i} premieres new episodes of one show, so it can hold only that one list")
+            blk["premiere"] = True
         if b.get("span") not in (None, ""):                 # one slot drawn across days: its pieces share this id
             if not isinstance(b["span"], str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,24}", b["span"]):
                 raise ScheduleError(f"{where}: block {i} has a link to other days that is not valid")
@@ -312,6 +326,37 @@ def _event(ev, i):
     return {"id": ident, "name": name, "when": clean_when, "replace": replace, "mode": mode, "schedule": sched}
 
 
+def _premieres(raw, clean):
+    """{show list: {"from", "since"}} for the shows that have a block marked as their premiere slot (settings for a show
+    nothing premieres are dropped; a marked block with no settings gets none until they are given: no new episodes yet)."""
+    raw = raw if isinstance(raw, dict) else {}
+    used = set()
+
+    def day(d):
+        for b in d["videos"]:
+            if b.get("premiere"):
+                used.add(b["lists"][0])
+    for w in [clean["default"]] + [clean["seasons"][s] for s in SEASONS if clean["seasons"].get(s)]:
+        for d in DAYS:
+            day(w[d])
+    for ev in clean["events"]:
+        for d in ([ev["schedule"]] if ev["mode"] == "same" else [ev["schedule"][x] for x in DAYS]):
+            day(d)
+    out = {}
+    for name in sorted(used):
+        got = raw.get(name) if isinstance(raw.get(name), dict) else {}
+        frm = got.get("from", "")
+        if not isinstance(frm, str) or ".." in frm.split("/") or frm.startswith("/") or len(frm) > 400:
+            raise ScheduleError(f"the premiere of '{name}': where the new episodes start is not valid")
+        since = got.get("since")
+        try:
+            since = date.fromisoformat(since).isoformat() if isinstance(since, str) else date.today().isoformat()
+        except ValueError:
+            raise ScheduleError(f"the premiere of '{name}': the date it starts from is not valid")
+        out[name] = {"from": frm.strip("/"), "since": since}
+    return out
+
+
 def validate(defn):
     """A definition cleaned, or ScheduleError."""
     if not isinstance(defn, dict):
@@ -339,6 +384,7 @@ def validate(defn):
     if not isinstance(events, list) or len(events) > MAX_EVENTS:
         raise ScheduleError(f"there can be at most {MAX_EVENTS} special days")
     clean["events"] = [_event(e, i) for i, e in enumerate(events, 1)]
+    clean["premieres"] = _premieres(defn.get("premieres"), clean)
     ids = [e["id"] for e in clean["events"]]
     if len(set(ids)) != len(ids):
         for e in clean["events"]:
@@ -561,11 +607,76 @@ def _season_entries(defn, shows=(), skip=()):
     return entries + late                                   # the one that was stretched comes last: the next season wins 1 March
 
 
-def conf_parts(defn, today, shows=(), skip=()):
+def _premiere_day_pieces(day, show):
+    return [i for i, b in enumerate(day["videos"]) if b.get("premiere") and b["lists"][0] == show]
+
+
+def premiere_dates(defn, show, lo, hi):
+    """The dates in lo..hi on which `show`'s premiere slot airs: a day with a block marked for it that no special day
+    replaces. These are what the new episodes are counted by."""
+    out, d = [], lo
+    while d <= hi:
+        if (d.month, d.day) != (2, 29) and _winner(defn.get("events", []), d)[0] is None \
+                and _premiere_day_pieces(_week_on(defn, d)[DAYS[d.weekday()]], show):
+            out.append(d)
+        d += timedelta(days=1)
+    return out
+
+
+def premiere_index(defn, show, d):
+    """How many premieres of `show` aired before date d, counted from the date they started: so the premiere on d airs the
+    new episode with this number (0 is the first new episode)."""
+    since = date.fromisoformat((defn.get("premieres") or {}).get(show, {}).get("since", d.isoformat()))
+    if d <= since:
+        return 0
+    return len(premiere_dates(defn, show, since, d - timedelta(days=1)))
+
+
+def _swapped(defn, loops):
+    """A copy of the definition whose blocks play the loop folder of a show with premieres instead of the show itself."""
+    out = copy.deepcopy(defn)
+
+    def day(d):
+        for b in d["videos"]:
+            b["lists"] = [loops.get(x, x) for x in b["lists"]]
+    for w in [out["default"]] + [out["seasons"][s] for s in SEASONS if out["seasons"].get(s)]:
+        for d in DAYS:
+            day(w[d])
+    for ev in out["events"]:
+        for d in ([ev["schedule"]] if ev["mode"] == "same" else [ev["schedule"][x] for x in DAYS]):
+            day(d)
+    return out
+
+
+def _premiere_hours(orig, base, d, premieres, shows, skip):
+    """The hours of date d (no special day) that a premiere changes: the premiere slot plays the new episode's folder."""
+    key = DAYS[d.weekday()]
+    o, b = _week_on(orig, d)[key], _week_on(base, d)[key]
+    day = copy.deepcopy(b)
+    changed = False
+    for show, info in premieres.items():
+        for i in _premiere_day_pieces(o, show):
+            k = premiere_index(orig, show, d)
+            if k < len(info.get("new", ())):
+                day["videos"][i]["lists"] = [info["new"][k]]
+                changed = True
+    if not changed:
+        return {}
+    was, now = hours_of(b, shows, skip), hours_of(day, shows, skip)
+    return {h: slot for h, slot in now.items() if was.get(h) != slot}
+
+
+def conf_parts(defn, today, shows=(), skip=(), premieres=None):
     """The station-config keys this definition makes: day_templates + the seven days, week_overrides, date_overrides.
     Keys with nothing to say are left out (so a plain schedule makes a plain config)."""
     parts = {}
     templates, names = {}, {}
+    orig = defn
+    premieres = {s: i for s, i in (premieres or {}).items() if s in (defn.get("premieres") or {})}
+    loops = {s: i["loop"] for s, i in premieres.items() if i.get("loop")}
+    if loops:                               # every other airing of the show plays its older episodes, in order, looping
+        defn = _swapped(defn, loops)
+        shows = list(shows) + list(loops.values())
     for d in DAYS:
         hours = hours_of(defn["default"][d], shows, skip)
         key = json.dumps(hours, sort_keys=True)
@@ -587,8 +698,9 @@ def conf_parts(defn, today, shows=(), skip=()):
             continue
         ev, day = _winner(defn["events"], d)
         if ev is None:
-            continue
-        hours = hours_of(day, shows, skip)
+            hours = _premiere_hours(orig, defn, d, premieres, shows, skip) if premieres else {}
+        else:
+            hours = hours_of(day, shows, skip)
         if hours:
             dates[_key(d)] = hours
     if dates:

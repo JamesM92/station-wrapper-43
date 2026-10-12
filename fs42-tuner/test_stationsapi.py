@@ -241,6 +241,40 @@ class SeasonsApiTest(Base):
         self.assertNotIn("date_overrides", self.console.confs["Cartoons"])           # over: taken out again
         self.assertEqual(self.console.confs["Cartoons"]["channel_number"], 12)           # nothing else was touched
 
+    def test_premiere_nights_make_their_folders_and_the_catalog_knows_them(self):
+        from datetime import timedelta
+        show = os.path.join(self.lists, "Series")
+        for season, n in (("Season 1", 2), ("Season 2", 3)):
+            os.makedirs(os.path.join(show, season))
+            for i in range(1, n + 1):
+                open(os.path.join(show, season, f"S0{season[-1]}E0{i}.mp4"), "w").close()
+        today = datetime(2026, 10, 14)                                       # a Wednesday
+        friday = self.sc.DAYS.index("friday")
+        week = {n: self.day((0, 24, ["Cartoons"])) for n in self.sc.DAYS}
+        for n in self.sc.DAYS[:5]:
+            week[n] = self.day((0, 19, ["Cartoons"]), (19, 20, ["Series"]), (20, 24, ["Cartoons"]))
+        week["friday"]["videos"][1]["premiere"] = True
+        f = self.form()
+        f["schedule"] = {"default": week, "seasons": {"dates": dict(self.sc.DEFAULT_DATES), **{s: None for s in self.sc.SEASONS}},
+                         "events": [], "premieres": {"Series": {"from": "Season 2", "since": "2026-10-14"}}}
+        self.api.save(None, f)
+        conf = self.console.confs["Cartoons"]
+        self.assertEqual(conf["day_templates"][conf["wednesday"]]["19"]["tags"], ".loop.Series")
+        night = next(v for k, v in conf["date_overrides"].items() if v["19"]["tags"] == ".new.Series.0")
+        self.assertEqual(night["19"]["tags"], ".new.Series.0")
+        self.assertTrue(os.path.exists(os.path.join(self.lists, ".new.Series.0", "S02E01.mp4")))    # made by the save
+        self.assertTrue(os.path.exists(os.path.join(self.lists, ".loop.Series", "Season 1", "S01E02.mp4")))
+        self.assertEqual(self.api.get("Cartoons")["why"], None)                  # still an editable station
+        # weeks later: the first three premieres have aired and joined the loop; the config and the catalog follow
+        self.console.log.clear()
+        later = datetime(2026, 11, 20)
+        self.assertEqual(self.api.sync_schedules(later), ["Cartoons"])
+        self.assertTrue(os.path.exists(os.path.join(self.lists, ".loop.Series", "Season 2", "S02E03.mp4")))
+        self.assertIn(("update", "Cartoons"), self.console.log)
+        self.console.log.clear()
+        self.assertEqual(self.api.sync_schedules(later), [])                     # nothing new: no config change, no catalog update
+        self.assertNotIn(("update", "Cartoons"), self.console.log)
+
     def test_rename_and_delete_take_the_definition_along(self):
         self.api.save(None, self.form())
         self.console.confs["Cartoons"]["_has_schedule"] = False

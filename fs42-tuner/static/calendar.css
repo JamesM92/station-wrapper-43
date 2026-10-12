@@ -37,6 +37,7 @@
 .cal-block.span { cursor: pointer; box-shadow: inset 3px 0 0 rgba(255, 255, 255, 0.75); }     /* one slot across days */
 .cal-block.span-more { border-bottom-style: dashed; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .cal-block.span-cont { border-top-style: dashed; border-top-left-radius: 0; border-top-right-radius: 0; }
+.cal-block.premiere { box-shadow: inset 0 0 0 2px #ffd36b; }
 .cal-text { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 .cal-block.short { flex-direction: row; align-items: center; gap: 0.5em; padding-top: 0; padding-bottom: 0; line-height: 1; }
 .cal-block.short .cal-text { flex: 1; min-width: 0; white-space: nowrap; }

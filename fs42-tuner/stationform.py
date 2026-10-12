@@ -305,7 +305,7 @@ def lists_used(form):
     return seen
 
 
-def to_conf(form, existing=None, today=None, shows=(), skip=()):
+def to_conf(form, existing=None, today=None, shows=(), skip=(), premieres=None):
     """A validated form -> a FieldStation42 station config. An existing config keeps everything the form
     does not own (logos, images, parental controls...). A form with a `schedule` (seasons, special days,
     commercials by the hour) makes its keys for `today` (see schedules.py)."""
@@ -375,7 +375,7 @@ def to_conf(form, existing=None, today=None, shows=(), skip=()):
         conf["wrapper_no_breaks"] = True
     if "schedule" in form:
         from datetime import date
-        conf.update(schedules.conf_parts(form["schedule"], today or date.today(), shows, skip))
+        conf.update(schedules.conf_parts(form["schedule"], today or date.today(), shows, skip, premieres))
         return conf
 
     def hours_of(blocks):

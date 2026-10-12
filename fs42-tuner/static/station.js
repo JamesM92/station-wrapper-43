@@ -46,6 +46,7 @@
     seasons: { dates: { spring: "03-01", summer: "06-01", fall: "09-01", winter: "12-01" }, spring: null, summer: null, fall: null, winter: null },
     events: [],
   });
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const eventById = () => state.schedule.events.find((e) => e.id === state.eventId) || null;
   const newId = () => Math.random().toString(16).slice(2, 10);
   const mdParts = (s) => s.split("-").map(Number);
@@ -467,6 +468,47 @@
     return box;
   }
 
+  // "new episodes air here": this one block (a day of the slot, say Friday) plays the show's newest episodes, one each time it
+  // comes round, and the show's other airings loop the older ones in order
+  function renderPremiere(box, b) {
+    const show = b.lists[0];
+    const on = el("input", { type: "checkbox", checked: b.premiere === true });
+    on.addEventListener("change", () => {
+      const prem = (state.schedule.premieres = state.schedule.premieres || {});
+      if (on.checked && !prem[show]) prem[show] = { from: "", since: iso(new Date()) };
+      cal.updateOne((x) => { if (on.checked) x.premiere = true; else delete x.premiere; });
+    });
+    const label = el("label", { className: "check" });
+    label.append(on, document.createTextNode(" New episodes premiere in this slot"));
+    box.append(label);
+    if (b.premiere !== true) return;
+    const cfg = (state.schedule.premieres || {})[show] || { from: "" };
+    const holder = el("div", { className: "premiere" });
+    box.append(holder);
+    holder.append(el("span", { className: "dim", textContent: "Each time this slot comes round it plays the next new episode. The show's other slots play the older episodes in order, and loop; with no new episode left, this one does too." }));
+    const pick = el("select", { ariaLabel: "Where the new episodes start" });
+    pick.append(el("option", { value: "", textContent: "Choose where the new episodes start…" }));
+    holder.append(el("span", { className: "dim", textContent: "The new episodes start at:" }), pick);
+    call(`/api/stations/show-episodes?list=${encodeURIComponent(show)}`).then((d) => {
+      const group = (label_, items, text) => {
+        if (!items.length) return;
+        const g = el("optgroup", { label: label_ });
+        for (const it of items) g.append(el("option", { value: it.path || it, textContent: text(it) }));
+        pick.append(g);
+      };
+      group("A season or folder", d.folders, (f) => `${f.path}  (${f.episodes} episodes)`);
+      group("An episode", d.episodes, (e) => e);
+      pick.value = cfg.from || "";
+      if (cfg.from && pick.value !== cfg.from) pick.append(el("option", { value: cfg.from, textContent: cfg.from + "  (not found)" })), pick.value = cfg.from;
+      holder.append(el("span", { className: "dim", textContent: `${d.total} episodes in ${show}. Everything before the one chosen is the loop; from it on is new.` }));
+    }).catch((e) => say(e.message, "err"));
+    pick.addEventListener("change", () => {
+      state.schedule.premieres[show] = { from: pick.value, since: iso(new Date()) };       // starting over: the first premiere is the next night
+      renderProblem();
+      schedulePreview();
+    });
+  }
+
   function renderSlotEditor() {
     const box = $("slot-editor"), s = cal ? cal.selected() : null;
     box.hidden = !s;
@@ -497,6 +539,7 @@
       const burnLabel = el("label", { className: "check" });
       burnLabel.append(burn, document.createTextNode(" Draw the captions on the picture while this plays"));
       box.append(burnLabel, el("span", { className: "dim", textContent: "Always visible, in the language chosen on the Stations page; a video without that language is left alone. Off, they are only the caption track a player can switch on." }));
+      if (b.lists.length === 1) renderPremiere(box, b);
       if (b.lists.some((n) => state.shows.includes(n))) {
         box.append(el("span", { className: "dim", textContent: "A show plays in order: each airing is the next episode, picking up after the last one scheduled, and starting over after the final one. A new show needs Save and build." }));
       }

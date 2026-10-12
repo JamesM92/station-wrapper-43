@@ -1734,6 +1734,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json({"stations": STATIONS.listing(), "edit": EDIT_FILES})
                 if action == "stations/get":
                     return self._json(STATIONS.get(q("name")))
+                if action == "stations/show-episodes":
+                    return self._json(STATIONS.show_episodes(q("list")))
                 if action == "stations/jobs":
                     return self._json({"jobs": STATIONS.jobs.list()})
                 if action == "stations/job":

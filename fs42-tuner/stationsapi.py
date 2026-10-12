@@ -14,6 +14,7 @@ import console_client
 import files as filemgr
 import guide_channel
 import legacy
+import premieres
 import resolver
 import schedules
 import stationform as sf
@@ -335,6 +336,28 @@ class Stations:
         """The lists that are shows used as sources: a slot that plays one is played in order (schedules.SERIES)."""
         return filemgr.shows_in(self.lists_dir) if self.lists_dir else []
 
+    def _premieres(self, defn, today, make=False):
+        """What the premiere nights of a definition come to (premieres.plan), or None when it has none. With `make`, the
+        folders they need are made and the names of those that got something new are returned with it."""
+        if not defn or not defn.get("premieres") or not self.lists_dir:
+            return None, []
+        plans = premieres.plan(defn, self.lists_dir, today)
+        return plans, (premieres.sync(self.lists_dir, plans) if make else [])
+
+    def show_episodes(self, name):
+        """What a show (a list) is made of, for choosing where its new episodes start: its folders and its episodes, in order."""
+        if not self.lists_dir or not isinstance(name, str) or not name or name.startswith("."):
+            raise sf.FormError("choose a show")
+        try:
+            path = list_path(self.lists_dir, name)
+        except NotFound as e:
+            raise sf.FormError(str(e))
+        if not os.path.isdir(path):
+            raise NotFound(f"there is no list called '{name}'")
+        eps = premieres.episodes(path)
+        return {"list": name, "total": len(eps), "folders": [{"path": p, "episodes": n} for p, n in premieres.folders(eps)][:300],
+                "episodes": eps[:3000]}
+
     def _form_of(self, name, conf, today):
         """(form, why not). A station whose schedule the wrapper keeps (seasons, special days, commercials by the
         hour) is read from that definition, as long as its live config is still the one made from it; a station made
@@ -348,9 +371,10 @@ class Stations:
             # usual case (nothing left out) is tried first and needs no look at the lists; the ones that were left out when it
             # was made are remembered; looking at the lists now is the last resort
             shows = self._shows()
+            plans = self._premieres(defn, today)[0]
 
             def made_from(skip):
-                return schedules.conf_matches(conf, schedules.conf_parts(defn, today, shows, skip))
+                return schedules.conf_matches(conf, schedules.conf_parts(defn, today, shows, skip, plans))
             if not (made_from(frozenset()) or made_from(schedules.skipped_of(name)) or made_from(self._empty_lists(defn))):
                 return None, ("its schedule was changed in the FieldStation42 console after it was set here, so the "
                               "page can't show it faithfully (saving here would replace those changes)")
@@ -422,7 +446,8 @@ class Stations:
             if channel_logo.custom(self.media_root, form["logo"]) is None:
                 warnings.append(f"the logo “{form['logo']}” is not there (or is not a picture under 2 MB inside your media), "
                                 "so a logo drawn from the channel's name is used")
-        conf = sf.to_conf(form, existing, shows=self._shows(),
+        plans = self._premieres(form.get("schedule"), datetime.now().date(), make=True)[0] if form["kind"] == "standard" else None
+        conf = sf.to_conf(form, existing, shows=self._shows(), premieres=plans,
                           skip=self._empty_lists(names=sf.lists_used(form), fresh=True) if form["kind"] == "standard" else ())
         if existing is not None:
             self.console.update(conf)
@@ -496,15 +521,21 @@ class Stations:
             if conf is None or defn is None or conf.get("network_type", "standard") != "standard":
                 continue
             skip = self._empty_lists(defn, fresh=True)
-            parts = schedules.conf_parts(defn, now.date(), self._shows(), skip)
+            plans, made = self._premieres(defn, now.date(), make=True)       # the premiere nights' folders, before the config names them
+            parts = schedules.conf_parts(defn, now.date(), self._shows(), skip, plans)
             if schedules.conf_matches(conf, parts):
                 if skip != schedules.skipped_of(name):
                     schedules.put(name, defn, skipped=skip)
-                continue
-            live = {k: v for k, v in conf.items() if not k.startswith("_")}
-            self.console.update(schedules.apply_parts(live, parts))
-            schedules.put(name, defn, skipped=skip)
-            changed.append(name)
+            else:
+                live = {k: v for k, v in conf.items() if not k.startswith("_")}
+                self.console.update(schedules.apply_parts(live, parts))
+                schedules.put(name, defn, skipped=skip)
+                changed.append(name)
+            if made:                                  # new folders: the catalog has to know them before a day is built from them
+                try:
+                    self.console.update_catalog(name)
+                except console_client.ConsoleError as e:
+                    print(f"[stations] {name}: could not add the premiere folders to its catalog: {e}", flush=True)
         return changed
 
     def preview(self, raw, days=14, now=None):
