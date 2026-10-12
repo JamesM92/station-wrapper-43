@@ -30,6 +30,16 @@ class NotFound(Exception):
     pass
 
 
+def list_path(lists_dir, name):
+    """The folder of a list: its name joined to the lists folder, normalised, and checked to stay inside it (NotFound when a
+    name would lead out of it). Names are also checked when a form is saved; this is the one place they become paths."""
+    root = os.path.normpath(lists_dir)
+    full = os.path.normpath(os.path.join(root, str(name)))
+    if not full.startswith(root.rstrip(os.sep) + os.sep):
+        raise NotFound(f"'{name}' is not a list")
+    return full
+
+
 def _has_video(folder):
     """Is there a video anywhere under this folder? Stops at the first one, and does not look at what a link points to
     (a list is thousands of links into a network share: looking at each one is what made this slow): a name that is a
@@ -77,7 +87,7 @@ class Jobs:
             for n in used:
                 if not n:
                     continue
-                for _r, _d, names in os.walk(os.path.join(self.lists_dir, n), followlinks=True):
+                for _r, _d, names in os.walk(list_path(self.lists_dir, n), followlinks=True):
                     total += sum(1 for f in names if os.path.splitext(f)[1].lower() in VIDEO_EXT)
             return total or None
         except Exception:
@@ -314,7 +324,7 @@ class Stations:
             if seen and not fresh and now - seen[0] < 20:        # looked at a moment ago: the Stations page asks often
                 empty = seen[1]
             else:
-                path = os.path.join(self.lists_dir, n)
+                path = list_path(self.lists_dir, n)
                 empty = os.path.isdir(path) and not _has_video(path)
                 self._empty_seen[n] = (now, empty)
             if empty:
@@ -363,9 +373,10 @@ class Stations:
         music = form["guide"]["music"]
         if not music or not self.media_root:
             return
-        real, root = os.path.realpath(music), os.path.realpath(self.media_root)
-        if real != root and not real.startswith(root.rstrip("/") + "/"):
-            raise sf.FormError(f"the music must be inside your media ({self.media_root}), because that is what the container can see")
+        root = os.path.realpath(self.media_root)
+        real = os.path.realpath(os.path.join(root, music))        # an address inside the media; one outside it is refused below
+        if not real.startswith(root.rstrip("/") + "/"):
+            raise sf.FormError(f"the music must be a folder or file inside your media ({self.media_root}), because that is what the container can see")
         if not os.path.exists(real):
             raise sf.FormError(f"{music} is not there: is its volume mounted?")
         if not guide_channel.audio_files(real):
@@ -382,11 +393,14 @@ class Stations:
                 names += [r["start"], r["end"]]
             if form["commercials"]:
                 names.append(form["commercials"])
-        missing = sorted({n for n in names if not os.path.isdir(os.path.join(self.lists_dir, n))})
+        try:
+            missing = sorted({n for n in names if not os.path.isdir(list_path(self.lists_dir, n))})
+        except NotFound as e:
+            raise sf.FormError(str(e))
         if missing:
             raise sf.FormError("these lists don't exist yet: " + ", ".join(f"'{m}'" for m in missing)
                                + ". Create them on the Lists & files page first.")
-        empty = sorted({n for n in names if not _has_video(os.path.join(self.lists_dir, n))})
+        empty = sorted({n for n in names if not _has_video(list_path(self.lists_dir, n))})
         return [f"'{n}' has no videos in it yet, so it will play nothing" for n in empty]
 
     def save(self, original, raw):
@@ -422,7 +436,7 @@ class Stations:
                     sf.make_cards_dir(self.lists_dir, start, end)
                 for off, name in ((form.get("midcards") is False, sf.OFF_CARDS), (not form["commercials"], sf.COM_OFF)):
                     if off:
-                        os.makedirs(os.path.join(self.lists_dir, name), exist_ok=True)
+                        os.makedirs(list_path(self.lists_dir, name), exist_ok=True)
             except OSError as e:
                 warnings.append(f"the start and end of break cards could not be set up: {e}")
         if "schedule" in form and form["kind"] == "standard":
@@ -512,7 +526,7 @@ class Stations:
         best = (0, None)
         if self.lists_dir and os.path.isdir(self.lists_dir):
             for name in sorted(os.listdir(self.lists_dir), key=str.casefold):
-                path = os.path.join(self.lists_dir, name)
+                path = list_path(self.lists_dir, name)
                 if name.startswith(".") or name in ("bump", "commercials") or not os.path.isdir(path):
                     continue
                 n = 0

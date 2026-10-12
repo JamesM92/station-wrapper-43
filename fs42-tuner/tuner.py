@@ -1490,8 +1490,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.send_response(302)
             where = "/login.html?next=" + quote(path + (f"?{query}" if query else ""), safe="")
-            if "\r" in where or "\n" in where:                           # quote() has made this impossible; a header is never built from a line break
-                where = "/login.html"
+            where = where.replace("\r", "").replace("\n", "")              # quote() leaves none; a header is never built from a line break
             self.send_header("Location", where)
             self.send_header("Content-Length", "0")
             self.end_headers()
@@ -2024,8 +2023,10 @@ class Handler(BaseHTTPRequestHandler):
             if os.path.isabs(rel) or ".." in rel.split("/") or "\0" in rel:
                 return self.send_error(404)
             full = os.path.normpath(os.path.join(real_root, rel))
-            folder = os.path.realpath(os.path.dirname(full))             # the file may be a link out to the media: its folder is the check
-            if folder != real_root and not folder.startswith(real_root.rstrip(os.sep) + os.sep):
+            if not full.startswith(real_root.rstrip(os.sep) + os.sep):
+                return self.send_error(404)
+            folder = os.path.realpath(os.path.dirname(full))             # the file may be a link out to the media: its folder must not leave
+            if not (folder + os.sep).startswith(real_root.rstrip(os.sep) + os.sep):
                 return self.send_error(404)
             got = art.get(full)
             if not got or os.path.getsize(got[0]) > 4 * 1024 * 1024:

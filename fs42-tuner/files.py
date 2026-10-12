@@ -223,8 +223,10 @@ def _within(base, rel=""):
     """`base` joined with an already cleaned relative path, normalised and checked to stay inside `base` (FileError when it
     does not). The one place a path from a page becomes a path on disk."""
     root = os.path.normpath(base)
-    full = os.path.normpath(os.path.join(root, rel)) if rel else root
-    if full != root and not full.startswith(root.rstrip(os.sep) + os.sep):
+    if not rel:
+        return root
+    full = os.path.normpath(os.path.join(root, rel))
+    if not full.startswith(root.rstrip(os.sep) + os.sep):
         raise FileError("that path is not valid")
     return full
 
@@ -562,7 +564,7 @@ class Files:
             first = os.path.splitext(clean[0]["path"].rsplit("/", 1)[-1])[0]
             base = f"{first} + {len(clean) - 1} more" if len(clean) > 1 else first
             name, n = base, 1
-            while os.path.lexists(os.path.join(self.tags_root, clean_tag(name))):      # another set starts the same way: number it
+            while os.path.lexists(_within(self.tags_root, clean_tag(name))):      # another set starts the same way: number it
                 n += 1
                 name = f"{base} ({n})"
             self.create_tag(name)
@@ -624,7 +626,7 @@ class Files:
         """A list name nothing else has: with the media folder it is in added first if the plain name is taken."""
         for candidate in (name, f"{rel.split('/')[0]} - {name}"):
             candidate = clean_tag(candidate)
-            if not os.path.lexists(os.path.join(self.tags_root, candidate)):
+            if not os.path.lexists(_within(self.tags_root, candidate)):
                 return candidate
         raise FileError(f"there is already a list called '{name}'. Rename it, or use that list", 409)
 

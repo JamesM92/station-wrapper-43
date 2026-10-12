@@ -87,10 +87,13 @@ def custom(media_root, rel):
     ext = os.path.splitext(rel)[1].lower()
     if ext not in IMAGE_EXT:
         return None
-    full = os.path.join(media_root, rel)
     real_root = os.path.realpath(media_root)
-    real = os.path.realpath(full)
-    if real != real_root and not real.startswith(real_root.rstrip(os.sep) + os.sep):
+    prefix = real_root.rstrip(os.sep) + os.sep
+    full = os.path.normpath(os.path.join(real_root, rel))
+    if not full.startswith(prefix):
+        return None
+    real = os.path.realpath(full)                          # a link inside the media may not lead out of it
+    if not real.startswith(prefix):
         return None
     if not os.path.isfile(real):
         return None

@@ -155,11 +155,11 @@ def fetch_channels(source):
 def probe(url, timeout=15):
     """Look at a stream for a few seconds: {"ok", "video", "audio", "error"}. ffprobe is given no way to open a local file."""
     url = check_url(url, "stream")
-    cmd = ["ffprobe", "-v", "error", "-protocol_whitelist", WHITELIST, "-rw_timeout", "8000000",
-           *(["-rtsp_transport", "tcp"] if url.lower().startswith("rtsp") else []),
-           "-show_entries", "stream=codec_type,codec_name,width,height", "-of", "json", url]
+    transport = ["-rtsp_transport", "tcp"] if url.lower().startswith("rtsp") else []
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run(["ffprobe", "-v", "error", "-protocol_whitelist", WHITELIST, "-rw_timeout", "8000000", *transport,
+                            "-show_entries", "stream=codec_type,codec_name,width,height", "-of", "json", "-i", url],
+                           capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": "no answer within a few seconds"}
     except OSError as e:
