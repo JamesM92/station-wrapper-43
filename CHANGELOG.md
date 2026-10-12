@@ -41,6 +41,11 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
   commands for ffmpeg and ffprobe are literal lists with the video or address as one argument; the redirect header can hold no
   line break; and the captions route answers 404 to a path that is not one of its two shapes. A guide channel's music must now be a
   folder or file *inside* the media, not the media folder itself.
+- **No `# nosec` is left in our code.** Every address the tuner, the sync service and the channel tools open now goes through one
+  opener that speaks http and https only (a `file:` or `ftp:` address, or a redirect to one, is refused); settings, schedules,
+  the follow list and the handover file are written `0644` (owned by the config folder's owner) instead of `0666`; the two
+  catalog queries have no built text; the signal files sit in the system temp folder rather than a fixed `/tmp` path; and the
+  dashboard's bind address can be narrowed with `FS42_BIND` (default every interface, as a container needs).
 - **GitHub Actions** are on checkout v7, setup-python v7 and codeql-action v4.
 - **An antenna tuner's logos in the guide.** A tuner added in converted or passed-on mode lost the logos that came with its listings;
   they are now kept on the channel in `/xmltv.xml`, so Jellyfin shows them in those modes too (guide only already did).

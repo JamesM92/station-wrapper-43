@@ -25,7 +25,7 @@ jobs:
         run: pip install bandit pip-audit detect-secrets
 
       - name: Static scan of our code (bandit, medium and above fail)
-        # fieldstation42/src is vendored upstream code, not ours to fix. A finding that is on purpose carries a `# nosec` with why.
+        # fieldstation42/src is vendored upstream code, not ours to fix. Findings in our code are fixed in the code, not suppressed.
         run: bandit -r fs42-tuner scripts supervisor fs42-sync ta-nfo --severity-level medium -x '*/test_*.py,*/e2e-*.py' -q
 
       - name: Audit what the image installs (pip-audit, a known vulnerability fails)

@@ -83,7 +83,7 @@ class SettingsTest(unittest.TestCase):
 
     def test_the_file_is_readable_and_editable_from_the_host(self):
         settings.set_ta({"enabled": True}, self.path)
-        self.assertEqual(os.stat(self.path).st_mode & 0o666, 0o666)
+        self.assertEqual(os.stat(self.path).st_mode & 0o666, 0o644)
         self.assertEqual([n for n in os.listdir(self.dir) if n.startswith(".settings-")], [])   # no temp left
 
 

@@ -39,7 +39,7 @@ def _rw():
     conn.executescript(SCHEMA)
     if fresh:
         try:
-            os.chmod(PATH, 0o666)  # nosec B103 - a file in the config volume, editable from the host by whoever owns the folder
+            os.chmod(PATH, 0o644)  # the owner is the config folder's: chown below
             if os.geteuid() == 0:
                 ref = os.stat(folder)
                 os.chown(PATH, ref.st_uid, ref.st_gid)

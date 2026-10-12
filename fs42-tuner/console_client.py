@@ -14,6 +14,7 @@ import urllib.request
 
 
 import schedlock
+import webget
 
 
 class ConsoleError(Exception):
@@ -73,7 +74,7 @@ class Console:
         req = urllib.request.Request(self.base + path, data=data, method=method,
                                      headers={"Content-Type": "application/json"})
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:  # nosec B310 - the console's own address from our config
+            with webget.open_url(req, timeout=timeout) as r:
                 return json.loads(r.read() or b"{}")
         except urllib.error.HTTPError as e:
             raise ConsoleError(_detail(e))

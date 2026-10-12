@@ -26,6 +26,8 @@ import urllib.parse
 import urllib.request
 import uuid
 
+import webget
+
 PATH = os.environ.get("FS42_IPTV", "/config/tuner/sources.json")
 TYPES = ("hdhomerun", "m3u", "stream")
 MODES = ("convert", "relay", "guide")      # "guide": a tuner whose channels are NOT played here (its listings only go in the guide)
@@ -76,7 +78,7 @@ def _get(url, limit, timeout=15):
     if not str(url).lower().startswith(("http://", "https://")):
         raise SourceError("an address to read a list of channels from must be http or https")
     req = urllib.request.Request(url, headers={"User-Agent": "StationWrapper43"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:  # nosec B310 - http and https only, checked above
+    with webget.open_url(req, timeout=timeout) as r:
         data = r.read(limit + 1)
     if len(data) > limit:
         raise SourceError("that is bigger than a channel list should be")

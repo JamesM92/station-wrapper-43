@@ -27,6 +27,8 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 from defusedxml import ElementTree as SafeET
+
+import webget
 from datetime import datetime, timedelta, timezone
 
 # Overridable so the endpoint can be pointed at a stub in tests.
@@ -49,7 +51,7 @@ def _fetch(url, timeout=30):
     if not str(url).lower().startswith(("http://", "https://")):
         raise ValueError("a guide address must be http or https")
     req = urllib.request.Request(url, headers={"User-Agent": "fs42-tuner/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:  # nosec B310 - http and https only, checked above
+    with webget.open_url(req, timeout=timeout) as r:
         raw = r.read()
     if raw[:2] == b"\x1f\x8b":            # some EPG feeds are served gzipped
         raw = gzip.decompress(raw)

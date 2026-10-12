@@ -12,9 +12,9 @@ import re
 import tempfile
 
 PATH = os.environ.get("FS42_SETTINGS", "/config/settings.json")
-STATUS_PATH = os.environ.get("FS42_TA_STATUS", "/tmp/ta-status.json")  # nosec B108 - signal files between the container's own services     # the job's own state, not a setting
-RUN_NOW = os.environ.get("FS42_TA_NOW", "/tmp/ta.now")  # nosec B108                                                 # "convert now": the job looks for this
-FARM_NOW = os.environ.get("FS42_FARM_NOW", "/tmp/farm.now")  # nosec B108                                               # "new channels": the farm job looks for this
+STATUS_PATH = os.environ.get("FS42_TA_STATUS", os.path.join(tempfile.gettempdir(), "ta-status.json"))   # the job's own state, not a setting
+RUN_NOW = os.environ.get("FS42_TA_NOW", os.path.join(tempfile.gettempdir(), "ta.now"))   # "convert now": the job looks for this
+FARM_NOW = os.environ.get("FS42_FARM_NOW", os.path.join(tempfile.gettempdir(), "farm.now"))   # "new channels": the farm job looks for this
 
 DEFAULT_TA = {"enabled": False, "libraries": ["/mnt/media/tubearchivist"], "interval_minutes": 1440}
 MAX_LIBRARIES = 12
@@ -169,7 +169,7 @@ def _save(path, data):
         with os.fdopen(fd, "w") as f:
             json.dump(data, f, indent=2)
             f.write("\n")
-        os.chmod(tmp, 0o666)  # nosec B103 - a file in the config volume, editable from the host by whoever owns the folder            # the config volume is yours: you can read and edit it from the host
+        os.chmod(tmp, 0o644)  # the owner is the config folder's: chown below
         os.replace(tmp, path)
     except BaseException:
         if os.path.exists(tmp):

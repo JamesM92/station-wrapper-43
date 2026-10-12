@@ -58,14 +58,14 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.
 # The tuner. The player script is fetched at build time and checked against a SHA-256, so
 # a changed file fails the build. To update: change the version and the hash together.
 COPY fs42-tuner/resolver.py fs42-tuner/tuner.py fs42-tuner/guide.py \
-     fs42-tuner/upstream.py fs42-tuner/library.py fs42-tuner/stations.py fs42-tuner/files.py fs42-tuner/settings.py fs42-tuner/tubearchivist.py fs42-tuner/console_client.py fs42-tuner/stationform.py fs42-tuner/stationsapi.py fs42-tuner/keeper.py fs42-tuner/schedlock.py fs42-tuner/auth.py fs42-tuner/captions.py fs42-tuner/legacy.py fs42-tuner/schedules.py fs42-tuner/prefetch.py fs42-tuner/guide_channel.py fs42-tuner/breaksnap.py fs42-tuner/breakstore.py fs42-tuner/iptv.py fs42-tuner/titles.py fs42-tuner/diag.py fs42-tuner/channel_logo.py fs42-tuner/art.py fs42-tuner/ccinject.py fs42-tuner/loudness.py /opt/tuner/
+     fs42-tuner/upstream.py fs42-tuner/library.py fs42-tuner/stations.py fs42-tuner/files.py fs42-tuner/settings.py fs42-tuner/tubearchivist.py fs42-tuner/console_client.py fs42-tuner/stationform.py fs42-tuner/stationsapi.py fs42-tuner/keeper.py fs42-tuner/schedlock.py fs42-tuner/auth.py fs42-tuner/captions.py fs42-tuner/legacy.py fs42-tuner/schedules.py fs42-tuner/prefetch.py fs42-tuner/guide_channel.py fs42-tuner/breaksnap.py fs42-tuner/breakstore.py fs42-tuner/iptv.py fs42-tuner/titles.py fs42-tuner/diag.py fs42-tuner/channel_logo.py fs42-tuner/art.py fs42-tuner/ccinject.py fs42-tuner/loudness.py fs42-tuner/webget.py /opt/tuner/
 COPY fs42-tuner/static/ /opt/tuner/static/
 ADD --checksum=sha256:ceb67d511fae54f442a5b9c03e6b8ea30a89efc9bde7fa3ce0687f05f31e6d6a \
     https://cdn.jsdelivr.net/npm/mpegts.js@1.8.2/dist/mpegts.min.js /opt/tuner/static/mpegts.min.js
 COPY fs42-tuner/config.default.json /opt/tuner-config.default.json
 
 # The symlink pool scanner and catalog watcher.
-COPY fs42-sync/pool.py fs42-sync/sync.py fs42-tuner/schedlock.py fs42-tuner/console_client.py fs42-tuner/breaksnap.py fs42-tuner/breakstore.py /opt/sync/
+COPY fs42-sync/pool.py fs42-sync/sync.py fs42-tuner/schedlock.py fs42-tuner/console_client.py fs42-tuner/breaksnap.py fs42-tuner/breakstore.py fs42-tuner/webget.py /opt/sync/
 
 # TA_NFOWriter (https://github.com/JamesM92/TA_NFOWriter): not copied into this repo. One
 # pinned release tag, verified by SHA-256. To update: change both ARGs together.
@@ -77,7 +77,7 @@ COPY ta-nfo/service.py fs42-tuner/settings.py /opt/ta-nfo/
 
 # The channel tools (init / build / link) run in here too, so no clone or pip is needed on the host:
 #   docker exec <container> fs42-channels build --dry-run
-COPY scripts/init.py scripts/build_channels.py scripts/fs42_link.py scripts/firstrun.py scripts/update_catalog.py fs42-tuner/schedlock.py fieldstation42/console_launch.py /opt/wrapper/
+COPY scripts/init.py scripts/build_channels.py scripts/fs42_link.py scripts/firstrun.py scripts/update_catalog.py fs42-tuner/schedlock.py fs42-tuner/webget.py fieldstation42/console_launch.py /opt/wrapper/
 COPY fieldstation42/fs42-channels /usr/local/bin/fs42-channels
 COPY assets/ /opt/assets/
 COPY farm/run.sh /opt/farm/run.sh

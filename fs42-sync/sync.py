@@ -31,10 +31,12 @@ import pool
 try:
     import schedlock
     import console_client
+    import webget
 except ImportError:         # run from the repo: the module sits in the dashboard's folder
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fs42-tuner"))
     import schedlock
     import console_client
+    import webget
 
 VIDEO_EXT = pool.VIDEO_EXT
 SKIP_TAGS = set()                   # bump is watched too: it is a real folder of links, and every station uses it
@@ -159,7 +161,7 @@ class Console:
         req = urllib.request.Request(self.base + path, method=method,
                                      data=b"{}" if method == "POST" else None,
                                      headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=60) as r:  # nosec B310 - the console's own address
+        with webget.open_url(req, timeout=60) as r:
             return json.loads(r.read() or b"{}")
 
     def stations(self):

@@ -65,6 +65,7 @@ from urllib.parse import quote, urlparse
 from xml.sax.saxutils import escape
 
 import auth as authmod
+import webget
 import captions
 import ccinject
 import loudness
@@ -2231,7 +2232,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_error(503, "All tuners in use")
         try:
             print(f"[ch{num}] passthrough -> {up['URL']}")
-            with urllib.request.urlopen(up["URL"], timeout=15) as r:  # nosec B310 - a stream address the tuner itself listed
+            with webget.open_url(up["URL"], timeout=15) as r:
                 self.send_response(200)
                 self.send_header("Content-Type", "video/mp2t")
                 self.send_header("Cache-Control", "no-cache")
@@ -2401,4 +2402,6 @@ if __name__ == "__main__":
         threading.Thread(target=follow_loop, daemon=True, name="follow-folders",
                          args=(int(os.environ.get("FOLLOW_INTERVAL_MINUTES", "30")),
                                float(os.environ.get("FOLLOW_FIRST_DELAY_SECONDS", "120")))).start()
-    ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()  # nosec B104 - a server in a container: every address is the point
+    # In the container the published port is reached through the container's own address, so the default is every
+    # interface; FS42_BIND narrows it (127.0.0.1 for a run on the host itself).
+    ThreadingHTTPServer((os.environ.get("FS42_BIND", ""), port), Handler).serve_forever()

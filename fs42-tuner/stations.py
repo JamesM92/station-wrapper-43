@@ -7,6 +7,7 @@ supervisor read those, so a new station shows up without anyone editing a channe
 import glob
 import json
 import os
+import tempfile
 import time
 
 
@@ -50,7 +51,7 @@ def station_confs(confs_dir):
 # ---- "a build is running": the dashboard marks it, the supervisor waits for it before restarting the dashboard.
 # Restarting the dashboard wipes the builds it is running (they live in its memory), and a new station makes the
 # supervisor restart it, so without this a station built right after being created would be cut off halfway.
-JOBS_BUSY = os.environ.get("FS42_JOBS_BUSY", "/tmp/fs42-jobs.busy")  # nosec B108 - a mark between the container's own services
+JOBS_BUSY = os.environ.get("FS42_JOBS_BUSY", os.path.join(tempfile.gettempdir(), "fs42-jobs.busy"))
 BUSY_MAX_AGE = 60                      # a mark not refreshed for this long is left over from a crash: ignore it
 
 

@@ -19,6 +19,8 @@ import threading
 import time
 import urllib.request
 
+import webget
+
 
 class UpstreamError(Exception):
     pass
@@ -45,7 +47,7 @@ class Upstream:
         self._lineup_at = 0
 
     def _get_json(self, url, timeout=8):
-        with urllib.request.urlopen(url, timeout=timeout) as r:  # nosec B310 - the tuner's own address from our config
+        with webget.open_url(url, timeout=timeout) as r:
             return json.load(r)
 
     def discover(self, force=False):

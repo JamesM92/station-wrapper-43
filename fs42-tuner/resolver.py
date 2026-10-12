@@ -261,10 +261,10 @@ def titles(db_path: str, station: str, paths) -> dict:
             with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
                 for i in range(0, len(paths), 400):
                     chunk = paths[i:i + 400]
-                    marks = ",".join("?" * len(chunk))
                     for path, title in conn.execute(
-                            f"SELECT path, title FROM catalog_entries WHERE station = ? AND path IN ({marks})",  # nosec B608 - only "?" marks go into the text; the values are bound
-                            (station, *chunk)):
+                            "SELECT path, title FROM catalog_entries WHERE station = ? "
+                            "AND path IN (SELECT value FROM json_each(?))",
+                            (station, json.dumps(chunk))):
                         if title:
                             out[path] = title
         except sqlite3.Error:
@@ -288,7 +288,9 @@ def file_meta_count(db_path: str, table: str = "file_meta") -> int:
         return 0
     try:
         with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=1) as conn:
-            return conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]  # nosec B608 - table is one of two fixed names (checked above)
+            query = ("SELECT COUNT(*) FROM chapter_points" if table == "chapter_points"
+                     else "SELECT COUNT(*) FROM file_meta")
+            return conn.execute(query).fetchone()[0]
     except sqlite3.Error:
         return 0
 
