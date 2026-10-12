@@ -35,10 +35,12 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
   on the station, else one drawn from its name), and an external source's channel's, when its source or its guide has one.
 
 ### Fixed
-- **Code scanning triaged.** The findings GitHub's code scanning raised were reviewed one by one: the login page's "go back to" address
-  is now resolved against this server and used only if it stays on it, the caption text is cleaned until no tag is left, a page's
-  file path is joined and checked to stay inside its folder in one place (`files.py`), and the static and picture routes check
-  containment explicitly. The rest were already guarded in a way the scanner cannot follow, and are closed with their reasons.
+- **Every finding of GitHub's code scanning is fixed in the code** (117, none dismissed). A page's file or list name is joined to its
+  folder and checked to stay inside it in one function per module, in a form the scanner follows; the login page's "go back to"
+  address is resolved against this server and used only if it stays on it; the caption text is cleaned until no tag is left; the
+  commands for ffmpeg and ffprobe are literal lists with the video or address as one argument; the redirect header can hold no
+  line break; and the captions route answers 404 to a path that is not one of its two shapes. A guide channel's music must now be a
+  folder or file *inside* the media, not the media folder itself.
 - **GitHub Actions** are on checkout v7, setup-python v7 and codeql-action v4.
 - **An antenna tuner's logos in the guide.** A tuner added in converted or passed-on mode lost the logos that came with its listings;
   they are now kept on the channel in `/xmltv.xml`, so Jellyfin shows them in those modes too (guide only already did).
