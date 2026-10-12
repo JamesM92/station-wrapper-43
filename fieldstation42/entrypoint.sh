@@ -7,6 +7,41 @@
 # starts the supervisor.
 set -euo pipefail
 
+# -1. Who the services run as. The container starts as root only to make the volumes belong to someone and to
+#     drop to that user: everything after this block (and every service) runs unprivileged.
+#       PUID / PGID   the user and group to run as (the account that owns your config folder on the host).
+#                     Unset: whoever owns /config; a brand new or root-owned /config gets 1000:1000.
+#       PUID=0        stay root (not recommended).
+#     Started as a non-root user already (compose `user:`), none of this applies and the volumes must be writable.
+#     The services' small signal files live in a private folder only that user can open (FS42_RUN_DIR).
+if [ "$(id -u)" = 0 ] && [ -z "${FS42_DROPPED:-}" ]; then
+  uid="${PUID:-}" gid="${PGID:-}"
+  if [ -z "$uid" ] && [ -d /config ]; then uid="$(stat -c %u /config)"; [ "$uid" = 0 ] && uid=""; fi
+  if [ -z "$gid" ] && [ -d /config ]; then gid="$(stat -c %g /config)"; [ "$gid" = 0 ] && gid=""; fi
+  uid="${uid:-1000}" gid="${gid:-$uid}"
+  case "$uid$gid" in *[!0-9]*) echo "entrypoint: PUID and PGID must be numbers (got '$uid' '$gid')" >&2; exit 78 ;; esac
+  if [ "$uid" != 0 ]; then
+    mkdir -p /config /app/catalog
+    # Whatever in the two volumes an earlier run as root left owned by someone else (the schedule database, the
+    # TubeArchivist view) is given to that user, so it can still be written. Links are never followed, the
+    # media is never touched, and when nothing is out of place this is one quiet look.
+    for v in /config /app/catalog; do
+      if [ -n "$(find "$v" -xdev ! -user "$uid" -print -quit 2>/dev/null)" ]; then
+        echo "entrypoint: giving what is not $uid's in $v to $uid:$gid"
+        find "$v" -xdev ! -user "$uid" -exec chown -h "$uid:$gid" {} + 2>/dev/null \
+          || echo "entrypoint: could not change the owner of everything in $v" >&2
+      fi
+    done
+    chown "$uid:$gid" /app
+    install -d -m 0700 -o "$uid" -g "$gid" /run/fs42
+    export FS42_RUN_DIR=/run/fs42 HOME=/run/fs42 FS42_DROPPED=1 PUID="$uid" PGID="$gid"
+    exec setpriv --reuid="$uid" --regid="$gid" --clear-groups "$0" "$@"
+  fi
+  echo "entrypoint: PUID=0: running as root" >&2
+  install -d -m 0700 /run/fs42
+  export FS42_RUN_DIR=/run/fs42
+fi
+
 # 0. The catalog must NOT be an SMB/CIFS share; local disk is the place for it.
 #    It is a folder of symlinks into your media. SMB shares refuse symlinks or
 #    follow them on the server, so every link would be missing or dead, and the
@@ -70,7 +105,7 @@ esac
 # compose file did) is left alone and used as it is.
 for d in runtime confs; do
   if [ -L "/app/$d" ] || [ ! -e "/app/$d" ]; then
-    ln -sfn "/config/$d" "/app/$d"
+    [ "$(readlink "/app/$d" 2>/dev/null)" = "/config/$d" ] || ln -sfn "/config/$d" "/app/$d"
   else
     echo "entrypoint: /app/$d is a real directory (an older layout?); using it as it is, not /config/$d" >&2
   fi
@@ -148,9 +183,9 @@ fi
 #    host. Create it from the image's default the first time, never overwrite it.
 if [ ! -e /config/tuner/config.json ]; then
   if cp /opt/tuner-config.default.json /config/tuner/config.json 2>/dev/null; then
-    # The container runs as root, but scripts/build_channels.py runs on the host as you and
-    # must be able to write this file. It holds no secrets.
-    chmod 666 /config/tuner/config.json
+    # Owned by the user the container runs as (PUID): scripts/build_channels.py on the host must run as
+    # that user to edit it. It holds no secrets.
+    chmod 644 /config/tuner/config.json
     echo "entrypoint: created /config/tuner/config.json from the default"
   else
     echo "entrypoint: could not create /config/tuner/config.json (is /config read-only?); the tuner will not start" >&2

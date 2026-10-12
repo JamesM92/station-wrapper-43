@@ -6,12 +6,12 @@
 # of the tag folders this made.
 #
 # Runs at start, then every FARM_INTERVAL_MINUTES, and right after ta-nfo finishes a pass (it leaves
-# farm.now in the temp folder), so a new YouTube channel gets its folder without waiting.
+# farm.now in the private run folder), so a new YouTube channel gets its folder without waiting.
 set -eu
 
 INTERVAL="${FARM_INTERVAL_MINUTES:-30}"
 ARGS="${FARM_ARGS:-}"
-FLAG="${FS42_FARM_NOW:-${TMPDIR:-/tmp}/farm.now}"
+FLAG="${FS42_FARM_NOW:-${FS42_RUN_DIR:-${TMPDIR:-/tmp}/fs42-run-$(id -u)}/farm.now}"
 
 stop() { echo "farm: stopping"; exit 0; }
 trap stop TERM INT

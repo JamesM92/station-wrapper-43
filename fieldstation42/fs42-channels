@@ -8,6 +8,12 @@
 #
 # Every option of the scripts works after the word (add --help). Inside the container the
 # catalog, the config, the manifest (/config/groups.toml) and the media paths are already known.
+# `docker exec` starts as root. The services run as the owner of /config (PUID), so these tools do too: what they write
+# then belongs to that user, and they share the services' private run folder (the schedule lock lives there).
+if [ "$(id -u)" = 0 ] && [ -d /config ] && [ "$(stat -c %u /config)" != 0 ]; then
+  exec setpriv --reuid="$(stat -c %u /config)" --regid="$(stat -c %g /config)" --clear-groups \
+    env FS42_RUN_DIR="${FS42_RUN_DIR:-/run/fs42}" HOME="${FS42_RUN_DIR:-/run/fs42}" "$0" "$@"
+fi
 cmd="${1:-help}"
 [ $# -gt 0 ] && shift
 case "$cmd" in

@@ -11,10 +11,12 @@ import os
 import re
 import tempfile
 
+import rundir
+
 PATH = os.environ.get("FS42_SETTINGS", "/config/settings.json")
-STATUS_PATH = os.environ.get("FS42_TA_STATUS", os.path.join(tempfile.gettempdir(), "ta-status.json"))   # the job's own state, not a setting
-RUN_NOW = os.environ.get("FS42_TA_NOW", os.path.join(tempfile.gettempdir(), "ta.now"))   # "convert now": the job looks for this
-FARM_NOW = os.environ.get("FS42_FARM_NOW", os.path.join(tempfile.gettempdir(), "farm.now"))   # "new channels": the farm job looks for this
+STATUS_PATH = os.environ.get("FS42_TA_STATUS", rundir.path("status.json"))   # the job's own state, not a setting
+RUN_NOW = os.environ.get("FS42_TA_NOW", rundir.path("ta.now"))   # "convert now": the job looks for this
+FARM_NOW = os.environ.get("FS42_FARM_NOW", rundir.path("farm.now"))   # "new channels": the farm job looks for this
 
 DEFAULT_TA = {"enabled": False, "libraries": ["/mnt/media/tubearchivist"], "interval_minutes": 1440}
 MAX_LIBRARIES = 12

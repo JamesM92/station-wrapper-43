@@ -111,6 +111,9 @@ echo "catalog-top=$(cd /app/catalog && for e in *; do if [ -L "$e" ]; then echo 
 echo "bump=$(ls /app/catalog/by-genre/bump | tr '\n' ' ')"
 echo "bump-real=$(find /app/catalog/by-genre/bump -type f ! -type l | wc -l)"
 echo "bump-owner=$(stat -c %u:%g /app/catalog/by-genre/bump) catalog-owner=$(stat -c %u:%g /app/catalog)"
+echo "service-users=$(for p in /proc/[0-9]*; do case "$(tr '\0' ' ' < $p/cmdline 2>/dev/null)" in *supervisor.py*|*tuner.py*|*console_launch*) awk '/^Uid:/{print $2}' $p/status;; esac; done | sort -u | tr '\n' ' ')"
+echo "run-dir=$(stat -c %a:%u /run/fs42) in-tmp=$(ls -A /tmp | grep -cE 'schedule.lock|jobs.busy|farm.now|ta.now|ta-status' || true)"
+echo "config-owner=$(stat -c %u /config) runtime-owner=$(stat -c %u /config/runtime) tuner-config-mode=$(stat -c %a /config/tuner/config.json)"
 # the channel tools, run inside the container (no clone, no pip on the host)
 fs42-channels init > /tmp/init.out 2>&1; echo "init-exit=$?"
 echo "groups-written=$(test -f /config/groups.toml && echo yes || echo no)"
@@ -309,6 +312,13 @@ grep -q 'catalog-top=by-genre media-links mine->link $' <<<"$out" \
   || fail "the catalog's top level is wrong (by-genre created, old whole-folder links removed, the user's own link kept, pool a real folder):" "$out"
 grep -q '^bump=sw43-splash.mp4 $' <<<"$out" && grep -q '^bump-real=1$' <<<"$out" \
   || fail "by-genre/bump was not created with one real generic clip:" "$out"
+grep -qE '^service-users=1000 $' <<<"$out" \
+  || fail "the services are not running as the unprivileged user (PUID default 1000):" "$out"
+grep -qE '^run-dir=700:1000 in-tmp=0$' <<<"$out" \
+  || fail "the private run folder is missing, not 0700, or a signal file is in /tmp:" "$out"
+grep -qE '^config-owner=1000 runtime-owner=1000 tuner-config-mode=644$' <<<"$out" \
+  || fail "the config volume is not the services' user's:" "$out"
+echo "services run as the unprivileged user, signal files in a private folder: ok"
 grep -qE '^bump-owner=([0-9]+:[0-9]+) catalog-owner=\1$' <<<"$out" \
   || fail "the new bump folder does not take the catalog folder's owner:" "$out"
 grep -qE 'entrypoint: Station Wrapper 43 [^ ]+ \(commit [^ ,]+, built' <<<"$out" && grep -q 'entrypoint: contains FieldStation42 [0-9a-f]\{7\} and TA_NFOWriter v[0-9]' <<<"$out" \

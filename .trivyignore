@@ -1,6 +1,6 @@
 # Findings that were looked at and decided. One id per line, each with why.
 
-# The container runs its services as root. Deliberate: the volumes (/config, the catalog, the media's symlink pool) belong to the
-# person who made them, and the services chown what they write back to them, which needs root. Run it with --cap-drop ALL,
-# read-only media mounts and no published ports but 5004 (see SECURITY.md).
+# The image has no USER line because the entrypoint starts as root for one reason: to give /config and the catalog to PUID:PGID
+# and drop to that user with setpriv. Every service runs as that user, never root (SECURITY.md). A USER line would make the
+# volumes' ownership impossible to fix up; whoever wants no root at all runs the container with `user:` (compose) instead.
 AVD-DS-0002

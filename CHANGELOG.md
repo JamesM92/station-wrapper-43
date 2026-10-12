@@ -6,6 +6,8 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
 ## [Unreleased]
 
 ### Changed
+- **The services no longer run as root.** The container starts as root only to give `/config` and the catalog to `PUID`:`PGID` (unset: the owner of your config folder, else 1000:1000) and drops to that user before anything runs; the console, dashboard, sync and TubeArchivist jobs, `fs42-channels` and everything they write are that user's. The first start gives what an earlier run as root left in those two folders to that user, once. Start the container with `user:` to never be root at all. `PUID=0` keeps root. With `cap_drop: ALL`, add back `CHOWN`, `SETUID`, `SETGID`.
+- **The services' signal files are in a private folder** (`/run/fs42`, 0700) instead of fixed names in `/tmp`.
 - **The dashboard's pictures are cheaper and say why.** A channel nobody is watching shows **idle** and no video is opened for it
   (a snapshot reads the video, which on a network share is real work); once somebody watches it, its picture refreshes every
   20 seconds. The TV guide channel shows its own guide, drawn here and refreshed every 10 seconds, without an encoder running.

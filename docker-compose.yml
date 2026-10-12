@@ -62,6 +62,10 @@ services:
       - "4242:4242"     # FieldStation42's console: build stations, catalogs, schedules
       - "5004:5004"     # the dashboard and player: what's on, watch a channel
     environment:
+      # The user and group the services run as, and who owns what they write in your config and catalog folders. Set them
+      # to your own account (`id -u`, `id -g`). Unset: whoever owns the config folder, or 1000:1000 for a new one.
+      PUID: ${PUID:-}
+      PGID: ${PGID:-}
       # Leave unset. Only for a config or catalog on a share where you have tested it.
       FS42_ALLOW_NETWORK_CATALOG: ${FS42_ALLOW_NETWORK_CATALOG:-}
       # OPTIONAL: keep the symlink pool (catalog/media-links) current, and watch the tag folders.

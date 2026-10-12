@@ -10,9 +10,9 @@ the catalog volume, catalog/tanfo/<folder name>-nfo, a folder of readable channe
 SYMLINKS written with this container's own paths. Several libraries each get a view of their own.
 Nothing is written to a library. It runs when switched on, when you press Convert now,
 when the library folder changes, and then every `interval_minutes`. A run that finishes leaves
-/tmp/farm.now so the farm job makes tag folders for new channels right away.
+farm.now in the private run folder (rundir.py) so the farm job makes tag folders for new channels right away.
 
-What it is doing is written to /tmp/ta-status.json for the dashboard to show.
+What it is doing is written to status.json in that folder for the dashboard to show.
 """
 import os
 import re

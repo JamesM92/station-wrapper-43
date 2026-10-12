@@ -36,6 +36,8 @@ services:
       - movies:/mnt/media/movies:ro
       - tvseries:/mnt/media/tvseries:ro
     environment:
+      PUID: "1000"                       # CHANGE: your user (id -u) and group (id -g); the services run as them
+      PGID: "1000"
       TZ: America/Toronto                # CHANGE: the guide and the schedule use this clock
       SYNC_ENABLED: "1"                  # keeps the symlink pool current (add-only)
       SYNC_INTERVAL_MINUTES: "60"

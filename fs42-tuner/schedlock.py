@@ -10,10 +10,11 @@ lock in /tmp (local to the container), and it is released when the holder exits,
 import contextlib
 import fcntl
 import os
-import tempfile
 import time
 
-PATH = os.environ.get("FS42_SCHEDULE_LOCK", os.path.join(tempfile.gettempdir(), "fs42-schedule.lock"))
+import rundir
+
+PATH = os.environ.get("FS42_SCHEDULE_LOCK", rundir.path("schedule.lock"))
 
 
 class LockTimeout(Exception):
@@ -24,7 +25,7 @@ class LockTimeout(Exception):
 def held(timeout=3600, poll=0.2, on_wait=None):
     """Wait for the lock (up to `timeout` seconds), hold it for the body, then release it.
     on_wait() is called once if the lock is not free straight away, so a page can say what it is waiting for."""
-    fd = os.open(PATH, os.O_CREAT | os.O_RDWR, 0o664)
+    fd = os.open(PATH, os.O_CREAT | os.O_RDWR, 0o600)
     try:
         end = time.time() + timeout
         told = False

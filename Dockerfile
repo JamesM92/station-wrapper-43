@@ -51,21 +51,24 @@ COPY fieldstation42/src/ /app/
 # copies the ownership of an existing image folder at the mount path onto the volume's folder on
 # the host. That would turn the folders you made as yourself into root's, and the scripts you run
 # on the host (init.py, build_channels.py, fs42_link.py) could no longer write to them.
-RUN rm -rf /app/confs /app/runtime /app/catalog
+# The two links are made here (dangling until the config volume is mounted) so a container started as a user that
+# cannot write to /app has them too.
+RUN rm -rf /app/confs /app/runtime /app/catalog \
+    && ln -s /config/runtime /app/runtime && ln -s /config/confs /app/confs
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
 # The tuner. The player script is fetched at build time and checked against a SHA-256, so
 # a changed file fails the build. To update: change the version and the hash together.
 COPY fs42-tuner/resolver.py fs42-tuner/tuner.py fs42-tuner/guide.py \
-     fs42-tuner/upstream.py fs42-tuner/library.py fs42-tuner/stations.py fs42-tuner/files.py fs42-tuner/settings.py fs42-tuner/tubearchivist.py fs42-tuner/console_client.py fs42-tuner/stationform.py fs42-tuner/stationsapi.py fs42-tuner/keeper.py fs42-tuner/schedlock.py fs42-tuner/auth.py fs42-tuner/captions.py fs42-tuner/legacy.py fs42-tuner/schedules.py fs42-tuner/prefetch.py fs42-tuner/guide_channel.py fs42-tuner/breaksnap.py fs42-tuner/breakstore.py fs42-tuner/iptv.py fs42-tuner/titles.py fs42-tuner/diag.py fs42-tuner/channel_logo.py fs42-tuner/art.py fs42-tuner/ccinject.py fs42-tuner/loudness.py fs42-tuner/webget.py /opt/tuner/
+     fs42-tuner/upstream.py fs42-tuner/library.py fs42-tuner/stations.py fs42-tuner/files.py fs42-tuner/settings.py fs42-tuner/tubearchivist.py fs42-tuner/console_client.py fs42-tuner/stationform.py fs42-tuner/stationsapi.py fs42-tuner/keeper.py fs42-tuner/schedlock.py fs42-tuner/auth.py fs42-tuner/captions.py fs42-tuner/legacy.py fs42-tuner/schedules.py fs42-tuner/prefetch.py fs42-tuner/guide_channel.py fs42-tuner/breaksnap.py fs42-tuner/breakstore.py fs42-tuner/iptv.py fs42-tuner/titles.py fs42-tuner/diag.py fs42-tuner/channel_logo.py fs42-tuner/art.py fs42-tuner/ccinject.py fs42-tuner/loudness.py fs42-tuner/webget.py fs42-tuner/rundir.py /opt/tuner/
 COPY fs42-tuner/static/ /opt/tuner/static/
 ADD --checksum=sha256:ceb67d511fae54f442a5b9c03e6b8ea30a89efc9bde7fa3ce0687f05f31e6d6a \
     https://cdn.jsdelivr.net/npm/mpegts.js@1.8.2/dist/mpegts.min.js /opt/tuner/static/mpegts.min.js
 COPY fs42-tuner/config.default.json /opt/tuner-config.default.json
 
 # The symlink pool scanner and catalog watcher.
-COPY fs42-sync/pool.py fs42-sync/sync.py fs42-tuner/schedlock.py fs42-tuner/console_client.py fs42-tuner/breaksnap.py fs42-tuner/breakstore.py fs42-tuner/webget.py /opt/sync/
+COPY fs42-sync/pool.py fs42-sync/sync.py fs42-tuner/schedlock.py fs42-tuner/console_client.py fs42-tuner/breaksnap.py fs42-tuner/breakstore.py fs42-tuner/webget.py fs42-tuner/rundir.py /opt/sync/
 
 # TA_NFOWriter (https://github.com/JamesM92/TA_NFOWriter): not copied into this repo. One
 # pinned release tag, verified by SHA-256. To update: change both ARGs together.
@@ -73,15 +76,15 @@ ARG TA_NFOWRITER_REF=v0.5.0
 ARG TA_NFOWRITER_SHA256=068fdfc9ec8c30b9efe19b9f2e7f5d9452b174a99909e131cecf0ebb73f0b4bc
 ADD --checksum=sha256:${TA_NFOWRITER_SHA256} \
     https://raw.githubusercontent.com/JamesM92/TA_NFOWriter/${TA_NFOWRITER_REF}/ta_nfo.py /opt/ta-nfo/ta_nfo.py
-COPY ta-nfo/service.py fs42-tuner/settings.py /opt/ta-nfo/
+COPY ta-nfo/service.py fs42-tuner/settings.py fs42-tuner/rundir.py /opt/ta-nfo/
 
 # The channel tools (init / build / link) run in here too, so no clone or pip is needed on the host:
 #   docker exec <container> fs42-channels build --dry-run
-COPY scripts/init.py scripts/build_channels.py scripts/fs42_link.py scripts/firstrun.py scripts/update_catalog.py fs42-tuner/schedlock.py fs42-tuner/webget.py fieldstation42/console_launch.py /opt/wrapper/
+COPY scripts/init.py scripts/build_channels.py scripts/fs42_link.py scripts/firstrun.py scripts/update_catalog.py fs42-tuner/schedlock.py fs42-tuner/webget.py fs42-tuner/rundir.py fieldstation42/console_launch.py /opt/wrapper/
 COPY fieldstation42/fs42-channels /usr/local/bin/fs42-channels
 COPY assets/ /opt/assets/
 COPY farm/run.sh /opt/farm/run.sh
-COPY supervisor/supervisor.py fs42-tuner/stations.py /opt/supervisor/
+COPY supervisor/supervisor.py fs42-tuner/stations.py fs42-tuner/rundir.py /opt/supervisor/
 COPY fieldstation42/entrypoint.sh /entrypoint.sh
 RUN chmod 755 /entrypoint.sh /opt/farm/run.sh /usr/local/bin/fs42-channels && chmod 644 /opt/ta-nfo/ta_nfo.py /opt/tuner/static/mpegts.min.js
 
