@@ -146,6 +146,32 @@ class DashboardTileTest(unittest.TestCase):
         self.assertEqual(tuner.pattern_reason(self.Chan("Test pattern: bad file"), self.Cur(self.Entry(os.path.join(here, "ok.mp4")))),
                          "BAD FILE")
 
+    @unittest.skipUnless(shutil.which("ffmpeg"), "needs ffmpeg")
+    def test_a_converted_source_gets_a_still_from_its_own_output_and_a_passed_on_one_none(self):
+        ts = os.path.join(tempfile.mkdtemp(), "x.ts")
+        subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=30",
+                        "-t", "3", "-c:v", "libx264", "-g", "30", "-f", "mpegts", ts], check=True, capture_output=True)
+        data = open(ts, "rb").read()
+        ch = tuner.Channel("88", "iptv:88", tuner.EncoderPool(2))
+        for i in range(0, len(data), 188 * 64):
+            ch.prime.append(data[i:i + 188 * 64])
+        ch.subs.add(object())
+        tuner.CHANS["88"] = ch
+        tuner.EXTERNAL["iptv:88"] = {"name": "Cam", "mode": "convert", "source": "S", "type": "stream"}
+        try:
+            got = tuner.thumbnail("88")
+            self.assertTrue(got and got[:2] == b"\xff\xd8")                         # a JPEG
+            tuner.THUMBS.clear()
+            tuner.EXTERNAL["iptv:88"]["mode"] = "relay"
+            self.assertIsNone(tuner.thumbnail("88"))
+            ch.subs.clear()
+            tuner.EXTERNAL["iptv:88"]["mode"] = "convert"
+            self.assertIsNone(tuner.thumbnail("88"))                                  # nobody watching: none
+        finally:
+            tuner.CHANS.pop("88", None)
+            tuner.EXTERNAL.pop("iptv:88", None)
+            tuner.THUMBS.clear()
+
     def test_no_video_is_opened_for_a_snapshot_of_a_channel_nobody_watches(self):
         tuner.CHANS["77"] = tuner.Channel("77", "NobodyWatches", tuner.EncoderPool(2))
         try:

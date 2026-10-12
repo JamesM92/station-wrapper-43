@@ -104,10 +104,11 @@
         thumb = '<div class="thumb-off">passing on</div>';       // copied untouched: nothing here watches or acts on it
       } else if (!r.viewers) {
         thumb = '<div class="thumb-off">idle</div>';             // our own channels and converted sources alike
-      } else if (now && !now.is_stream) {
-        thumb = `<img class="thumb-img" alt="" data-ch="${n}" src="/thumb/${n}.jpg?b=${bucket}">`;
+      } else if (r.external || (now && !now.is_stream)) {
+        // a watched station, or a watched converted source (a still from the few seconds of it this container keeps)
+        thumb = `<img class="thumb-img" alt="" data-ch="${n}"${r.external ? ' data-fallback="\u25B6 live stream"' : ""} src="/thumb/${n}.jpg?b=${bucket}">`;
       } else {
-        thumb = '<div class="thumb-off">\u25B6 live stream</div>';  // a converted stream being watched: no snapshot is made of it
+        thumb = '<div class="thumb-off">\u25B6 live stream</div>';
       }
       const pct = now && now.duration ? Math.min(100, (now.elapsed / now.duration) * 100) : 0;
       const badges = [
@@ -156,7 +157,7 @@
       img.addEventListener("error", () => {
         const off = document.createElement("div");
         off.className = "thumb-off";
-        off.textContent = "no preview";
+        off.textContent = img.dataset.fallback || "no preview";
         img.replaceWith(off);
       });
     });

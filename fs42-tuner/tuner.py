@@ -1311,6 +1311,21 @@ THUMB_LOOKAHEAD = (0, 4, 10, 20)      # seconds past "now" to try when the frame
 THUMB_NOT_BLACK = 3000                # a 320px JPEG smaller than this is (nearly) one flat colour
 
 
+def _frame_from_prime(chan):
+    """One still of a converted external channel, from the few seconds of its own output the channel already keeps for a viewer
+    who joins. Nothing more is asked of the source: a second connection to a tuner would take another of its tuners."""
+    data = b"".join(list(chan.prime))
+    if len(data) < 188 * 20:
+        return None
+    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-i", "pipe:0", "-frames:v", "1",
+           "-vf", "scale=320:-2", "-f", "image2", "-c:v", "mjpeg", "-q:v", "5", "pipe:1"]
+    try:
+        out = subprocess.run(cmd, input=data, capture_output=True, timeout=15).stdout
+    except (subprocess.SubprocessError, OSError):
+        return None
+    return out or None
+
+
 def thumbnail(num):
     """JPEG snapshot for a channel, or None if there isn't one to show (off
     air, a live stream, or a missing file). Cached per channel for THUMB_TTL
@@ -1321,12 +1336,15 @@ def thumbnail(num):
     guide = guide_conf(chan.station) is not None
     if not guide and not chan.subs:                  # nobody is watching: no video is opened just to paint a dashboard tile
         return None
+    ext = EXTERNAL.get(chan.station)
+    if ext is not None and ext.get("mode") == "relay":
+        return None                                  # passed on untouched: nothing here looks at it
     now = time.time()
     with THUMBS_LOCK:
         hit = THUMBS.get(num)
         if hit and now - hit[0] < (THUMB_TTL_GUIDE if guide else THUMB_TTL):
             return hit[1]
-    body = _grab_frame(chan.station)
+    body = _frame_from_prime(chan) if ext is not None else _grab_frame(chan.station)
     with THUMBS_LOCK:
         THUMBS[num] = (now, body)
     return body

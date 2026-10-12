@@ -12,7 +12,7 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
   A channel that is off air, has nothing scheduled, has a file that is gone, or fell back to the test pattern shows the test
   pattern with its reason in the corner (*NO PROGRAMMING*, *NO FILE: name*, *BAD FILE*, *NO VIDEOS IN: list*...).
 - **An external source's channels on the dashboard follow how they are played.** A converted one is treated like a station of our own:
-  *idle* until somebody watches it, then *live stream*. One passed on as it is says *passing on*, since nothing here watches it. A
+  *idle* until somebody watches it, then a picture that refreshes every 20 seconds like a station's (taken from the few seconds of its own output this container already keeps, so the source is not asked again). One passed on as it is says *passing on*, since nothing here watches it. A
   guide-only tuner has no channels of ours, so it has no tiles.
 - **No flicker when the dashboard updates.** A picture stays on screen until its replacement has loaded (the guide channel's
   picture used to blank for a moment each time it was drawn again).
