@@ -20,6 +20,10 @@
   "tuner_count": 12,
   "_linger_seconds": "Keep an encoder warm this long after its last viewer leaves, so a channel flip away and back doesn't rebuild it.",
   "linger_seconds": 10,
+  "_external_linger_seconds": "A source converted here stays up this long after its last viewer, so its picture on the dashboard keeps coming.",
+  "external_linger_seconds": 300,
+  "_idle_tail_minutes": "A station of ours finishes what is queued (the programme and the next whole break) after its last viewer, or stops after this long. 0: stop after linger_seconds.",
+  "idle_tail_minutes": 15,
   "guide_hours": 48,
   "_guide": "FieldStation42's own schedule only -- the only source the portal's guide grid actually needs. 'hdhomerun' and 'xmltv' source types still work if you ever want them, but there's no passthrough device or external feed configured here to merge in.",
   "guide": {

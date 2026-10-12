@@ -155,7 +155,8 @@ class DashboardTileTest(unittest.TestCase):
         ch = tuner.Channel("88", "iptv:88", tuner.EncoderPool(2))
         for i in range(0, len(data), 188 * 64):
             ch.prime.append(data[i:i + 188 * 64])
-        ch.subs.add(object())
+        ch.subs.add(tuner.Subscriber())
+        ch.thread = object()                                          # its encoder is running
         tuner.CHANS["88"] = ch
         tuner.EXTERNAL["iptv:88"] = {"name": "Cam", "mode": "convert", "source": "S", "type": "stream"}
         try:
@@ -164,28 +165,86 @@ class DashboardTileTest(unittest.TestCase):
             tuner.THUMBS.clear()
             tuner.EXTERNAL["iptv:88"]["mode"] = "relay"
             self.assertIsNone(tuner.thumbnail("88"))
-            ch.subs.clear()
+            ch.thread = None
             tuner.EXTERNAL["iptv:88"]["mode"] = "convert"
-            self.assertIsNone(tuner.thumbnail("88"))                                  # nobody watching: none
+            self.assertIsNone(tuner.thumbnail("88"))                                  # its encoder is down: none
         finally:
             tuner.CHANS.pop("88", None)
             tuner.EXTERNAL.pop("iptv:88", None)
             tuner.THUMBS.clear()
 
-    def test_no_video_is_opened_for_a_snapshot_of_a_channel_nobody_watches(self):
+    def test_no_video_is_opened_for_a_snapshot_and_none_is_made_while_the_encoder_is_down(self):
         tuner.CHANS["77"] = tuner.Channel("77", "NobodyWatches", tuner.EncoderPool(2))
+        called, real = [], tuner._frame_from_prime
+        tuner._frame_from_prime = lambda chan: called.append(chan.station) or b"jpg"
+        tuner._grab_frame_real = tuner._grab_frame
+        tuner._grab_frame = lambda station: called.append("FILE:" + station) or b"file"
         try:
-            called = []
-            real = tuner._grab_frame
-            tuner._grab_frame = lambda station: called.append(station) or b"jpg"
-            self.assertIsNone(tuner.thumbnail("77"))
+            self.assertIsNone(tuner.thumbnail("77"))                  # no encoder running: idle
             self.assertEqual(called, [])
-            tuner.CHANS["77"].subs.add(object())                                              # somebody tunes in
-            self.assertEqual(tuner.thumbnail("77"), b"jpg")
+            tuner.CHANS["77"].thread = object()                       # an encoder is running (a viewer, or the tail after one)
+            self.assertEqual(tuner.thumbnail("77"), b"jpg")           # taken from the output it keeps, not from a file
             self.assertEqual(called, ["NobodyWatches"])
         finally:
-            tuner._grab_frame = real
+            tuner._frame_from_prime = real
+            tuner._grab_frame = tuner._grab_frame_real
+            tuner.THUMBS.clear()
             del tuner.CHANS["77"]
+
+
+class WindDownTest(unittest.TestCase):
+    def channel(self, station="Own"):
+        return tuner.Channel("66", station, tuner.EncoderPool(2))
+
+    def test_a_station_finishes_the_queued_break_and_stops_at_the_start_of_the_next(self):
+        ch = self.channel()
+        ch.tail = {"breaks": 1}                                       # the last viewer left during the programme
+        self.assertFalse(ch.tail_stops_here(False))                   # the programme goes on
+        self.assertFalse(ch.tail_stops_here(True))                    # the queued break starts
+        self.assertFalse(ch.tail_stops_here(True))                    # ...its next commercial or card is part of it
+        self.assertFalse(ch.tail_stops_here(False))                   # the programme again
+        self.assertTrue(ch.tail_stops_here(True))                     # a break that was not queued: stop here
+
+    def test_leaving_in_the_middle_of_a_break_means_that_break_was_the_next_one(self):
+        ch = self.channel()
+        ch.in_break = True
+        ch.thread = object()
+        sub = tuner.Subscriber()
+        ch.subs.add(sub)
+        ch.pool.acquire("66")
+        ch.detach(sub)
+        try:
+            self.assertEqual(ch.tail, {"breaks": 0})
+            self.assertFalse(ch.tail_stops_here(True))                # still inside it
+            self.assertFalse(ch.tail_stops_here(False))
+            self.assertTrue(ch.tail_stops_here(True))                 # the next one stops it
+        finally:
+            ch.reaper.cancel()
+
+    def test_somebody_tuning_in_cancels_the_wind_down(self):
+        ch = self.channel()
+        ch.tail = {"breaks": 0}
+        ch.thread = object()
+        ch.attach()
+        self.assertIsNone(ch.tail)
+        self.assertFalse(ch.tail_stops_here(True))
+
+    def test_how_long_a_channel_stays_up_after_the_last_viewer(self):
+        for station, ext, want in (("Own", None, tuner.IDLE_TAIL_SECONDS),
+                                   ("iptv:5", {"mode": "convert"}, tuner.EXTERNAL_LINGER),
+                                   ("iptv:6", {"mode": "relay"}, tuner.LINGER)):
+            if ext:
+                tuner.EXTERNAL[station] = ext
+            ch = self.channel(station)
+            ch.thread = object()
+            sub = tuner.Subscriber()
+            ch.subs.add(sub)
+            try:
+                ch.detach(sub)
+                self.assertEqual(ch.reaper.interval, want, station)
+            finally:
+                ch.reaper.cancel()
+                tuner.EXTERNAL.pop(station, None)
 
 
 if __name__ == "__main__":

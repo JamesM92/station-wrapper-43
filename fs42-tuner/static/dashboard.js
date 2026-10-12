@@ -102,11 +102,11 @@
         thumb = `<img class="thumb-img" alt="" data-ch="${n}" src="/thumb/${n}.jpg?b=${Math.floor(Date.now() / GUIDE_BUCKET_MS)}">`;
       } else if (r.external && r.external.mode === "relay") {
         thumb = '<div class="thumb-off">passing on</div>';       // copied untouched: nothing here watches or acts on it
-      } else if (!r.viewers) {
-        thumb = '<div class="thumb-off">idle</div>';             // our own channels and converted sources alike
+      } else if (!r.encoding) {
+        thumb = '<div class="thumb-off">idle</div>';             // its encoder is not running: our own channels and converted sources alike
       } else if (r.external || (now && !now.is_stream)) {
         // a watched station, or a watched converted source (a still from the few seconds of it this container keeps)
-        thumb = `<img class="thumb-img" alt="" data-ch="${n}"${r.external ? ' data-fallback="\u25B6 live stream"' : ""} src="/thumb/${n}.jpg?b=${bucket}">`;
+        thumb = `<img class="thumb-img" alt="" data-ch="${n}" data-fallback="${r.external ? "\u25B6 live stream" : "\u25B6 on air"}" src="/thumb/${n}.jpg?b=${bucket}">`;
       } else {
         thumb = '<div class="thumb-off">\u25B6 live stream</div>';
       }

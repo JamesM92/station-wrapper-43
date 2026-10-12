@@ -11,6 +11,12 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
   20 seconds. The TV guide channel shows its own guide, drawn here and refreshed every 10 seconds, without an encoder running.
   A channel that is off air, has nothing scheduled, has a file that is gone, or fell back to the test pattern shows the test
   pattern with its reason in the corner (*NO PROGRAMMING*, *NO FILE: name*, *BAD FILE*, *NO VIDEOS IN: list*...).
+- **A channel keeps running for a while after the last viewer leaves, and the dashboard's pictures follow it.** A tile shows
+  *idle* only when its encoder is not running, and its picture is taken from the few seconds of output the channel already keeps,
+  so no file is opened for it. A source converted here stays up for 5 minutes after the last viewer (`external_linger_seconds`).
+  A station of ours finishes what is queued (the programme and the next whole commercial break with its mid cards) and stops at
+  the start of the break after that, or after 15 minutes (`IDLE_TAIL_MINUTES`, `0` for the old 10 seconds), whichever is first.
+  Nothing new is read ahead for nobody, and a viewer who comes back cancels the wind-down.
 - **An external source's channels on the dashboard follow how they are played.** A converted one is treated like a station of our own:
   *idle* until somebody watches it, then a picture that refreshes every 20 seconds like a station's (taken from the few seconds of its own output this container already keeps, so the source is not asked again). One passed on as it is says *passing on*, since nothing here watches it. A
   guide-only tuner has no channels of ours, so it has no tiles.

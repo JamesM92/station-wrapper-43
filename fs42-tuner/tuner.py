@@ -182,6 +182,11 @@ MAX_ENCODERS = int(CONF.get("max_encoders", 4))
 TUNER_COUNT  = int(CONF.get("tuner_count", 12))
 GUIDE_HOURS  = int(CONF.get("guide_hours", 48))
 LINGER       = float(CONF.get("linger_seconds", 10))
+# After the last viewer leaves a channel keeps running a while, so the dashboard keeps its picture and a person who comes
+# straight back finds it alive. A source converted here: this long. A station of ours: through what is already queued (the
+# programme, the next break and its mid cards) and no further, or this long, whichever is first.
+EXTERNAL_LINGER = float(CONF.get("external_linger_seconds", 300))
+IDLE_TAIL_SECONDS = float(os.environ.get("IDLE_TAIL_MINUTES") or CONF.get("idle_tail_minutes", 15)) * 60
 ADVERTISE    = CONF["advertise_url"].rstrip("/")
 DEVICE_ID    = CONF.get("device_id", "FS42" + uuid.uuid5(uuid.NAMESPACE_DNS, ADVERTISE).hex[:8].upper())
 
@@ -460,6 +465,8 @@ class Channel:
         self.reaper = None
         self.now_playing = "--"
         self.reload = threading.Event()       # set to make a running guide channel start over with its new settings
+        self.tail = None                      # set when the last viewer left a station of ours: how many breaks may still start
+        self.in_break = False                 # the segment being played is a commercial or a mid card
         self.clock = 0.0                      # seconds of stream sent so far, for continuous timestamps (CONTINUOUS_TS)
 
     def attach(self):
@@ -468,6 +475,7 @@ class Channel:
             if self.reaper:
                 self.reaper.cancel()
                 self.reaper = None
+            self.tail = None                                       # somebody is here again: nothing is winding down
             if self.thread is None:
                 if not self.pool.acquire(self.number):
                     return None
@@ -493,23 +501,47 @@ class Channel:
             n = len(self.subs)
             print(f"[ch{self.number}] viewer left ({n} remaining)")
             if n == 0 and self.thread is not None and self.reaper is None:
-                self.reaper = threading.Timer(LINGER, self._shutdown)
+                ext = EXTERNAL.get(self.station)
+                if ext is not None and ext.get("mode") == "convert":
+                    delay = EXTERNAL_LINGER                         # a converted source: its picture keeps coming for a while
+                elif ext is None and IDLE_TAIL_SECONDS > 0 and guide_conf(self.station) is None:
+                    delay = IDLE_TAIL_SECONDS                       # a station of ours: what is queued, then it stops (_step)
+                    self.tail = {"breaks": 0 if self.in_break else 1}
+                else:
+                    delay = LINGER
+                self.reaper = threading.Timer(delay, self._shutdown, args=(delay,))
                 self.reaper.daemon = True
                 self.reaper.start()
 
-    def _shutdown(self):
+    def _shutdown(self, idle=None, why=None):
         with self.lock:
             if self.subs:
                 self.reaper = None
                 return
+            if self.reaper:
+                self.reaper.cancel()
             self.stop.set()
             self.thread = None
             self.reaper = None
+            self.tail = None
             self.prime.clear()
             self.prime_bytes = 0
             self.now_playing = "--"
         self.pool.release(self.number)
-        print(f"[ch{self.number}] encoder down (idle {LINGER:.0f}s)")
+        print(f"[ch{self.number}] encoder down ({why or 'idle %.0fs' % (LINGER if idle is None else idle)})")
+
+    def tail_stops_here(self, is_break):
+        """Called as a segment is about to start. After the last viewer left a station of ours it may finish what is queued: the
+        programme and the next whole break (with its mid cards). True when this segment would start a break that was not part of
+        that, so the channel should stop instead (no file is opened for nobody)."""
+        starts = is_break and not self.in_break
+        self.in_break = bool(is_break)
+        if self.tail is None or self.subs or not starts:
+            return False
+        if self.tail["breaks"] > 0:
+            self.tail["breaks"] -= 1
+            return False
+        return True
 
     def _broadcast(self, chunk):
         self.prime.append(chunk)
@@ -637,6 +669,9 @@ class Channel:
             self.clock += min(cur.remaining, 30)
             return
         offair = offair_reason(self.station, entry, cur.block_title)
+        if self.tail_stops_here(entry.content_type in ("commercial", "bump")):
+            self._shutdown(why="nobody watching: the queued break has run")
+            return
 
         self.now_playing = cur.block_title
         local, pinned = (path, False) if entry.is_stream else PREFETCH.pin(path)     # a copy made ahead of time, if there is one
@@ -1334,7 +1369,7 @@ def thumbnail(num):
     if chan is None:
         return None
     guide = guide_conf(chan.station) is not None
-    if not guide and not chan.subs:                  # nobody is watching: no video is opened just to paint a dashboard tile
+    if not guide and chan.thread is None:            # its encoder is not running: no video is opened just to paint a dashboard tile
         return None
     ext = EXTERNAL.get(chan.station)
     if ext is not None and ext.get("mode") == "relay":
@@ -1344,7 +1379,8 @@ def thumbnail(num):
         hit = THUMBS.get(num)
         if hit and now - hit[0] < (THUMB_TTL_GUIDE if guide else THUMB_TTL):
             return hit[1]
-    body = _frame_from_prime(chan) if ext is not None else _grab_frame(chan.station)
+    # the picture is taken from the few seconds of output the channel already keeps (no file is read for it)
+    body = _grab_frame(chan.station) if guide else _frame_from_prime(chan)
     with THUMBS_LOCK:
         THUMBS[num] = (now, body)
     return body
