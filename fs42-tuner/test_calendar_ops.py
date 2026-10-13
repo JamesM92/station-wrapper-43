@@ -153,7 +153,21 @@ class SpanTest(unittest.TestCase):
 
     def test_bounds(self):
         self.assertEqual(ops(f"O.spanBounds({json.dumps(self.three())}, {json.dumps(self.ORDER)}, 's1')"),
-                         {"keys": ["monday", "tuesday", "wednesday"], "from": 15, "to": 16, "days": 3})
+                         {"keys": ["monday", "tuesday", "wednesday"], "from": 15, "to": 16, "days": 3, "premiere": []})
+
+    def test_the_weekend_can_be_linked_to_a_weekday_slot(self):
+        w = ops(f"O.paintKeys({json.dumps(self.week())}, ['saturday', 'sunday'], 'friday', 15, 16, {{lists: ['B']}}, 's9')")
+        self.assertEqual(w["friday"][1], {**V(15, 16, "B"), "span": "s9"})
+        self.assertEqual(w["sunday"][1], {**V(15, 16, "B"), "span": "s9"})
+        self.assertEqual(w["monday"], [V(0, 24, "A")])
+        one = ops(f"O.paintKeys({json.dumps(self.week())}, [], 'friday', 15, 16, {{lists: ['B']}}, 's9')")
+        self.assertEqual(one["friday"], [V(0, 24, "A")])           # nothing else chosen: nothing linked
+
+    def test_premiere_nights_are_reported_per_day(self):
+        w = self.three()
+        w["tuesday"][1]["premiere"] = True
+        got = ops(f"O.spanBounds({json.dumps(w)}, {json.dumps(self.ORDER)}, 's1')")
+        self.assertEqual(got["premiere"], ["tuesday"])
 
     def test_plain_drops_the_link(self):
         self.assertEqual(ops("O.plain({from: 1, to: 2, lists: ['A'], span: 'x'})"), V(1, 2, "A"))

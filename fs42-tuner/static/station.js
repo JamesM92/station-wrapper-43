@@ -472,20 +472,41 @@
   // comes round, and the show's other airings loop the older ones in order
   function renderPremiere(box, b) {
     const show = b.lists[0];
-    const on = el("input", { type: "checkbox", checked: b.premiere === true });
-    on.addEventListener("change", () => {
-      const prem = (state.schedule.premieres = state.schedule.premieres || {});
-      if (on.checked && !prem[show]) prem[show] = { from: "", since: iso(new Date()) };
-      cal.updateOne((x) => { if (on.checked) x.premiere = true; else delete x.premiere; });
-    });
-    const label = el("label", { className: "check" });
-    label.append(on, document.createTextNode(" New episodes premiere in this slot"));
-    box.append(label);
-    if (b.premiere !== true) return;
-    const cfg = (state.schedule.premieres || {})[show] || { from: "" };
+    const reach = cal.selectedSpan();
+    const prem = () => (state.schedule.premieres = state.schedule.premieres || {});
+    const ensure = () => { if (!prem()[show]) prem()[show] = { from: "", since: iso(new Date()) }; };
     const holder = el("div", { className: "premiere" });
+    if (reach) {
+      // a slot on several days: the nights are chosen here, on the slot, so nothing is set day by day
+      holder.append(el("span", { className: "dim", textContent: "New episodes premiere on (the slot's other days play the older episodes, in order, and loop):" }));
+      const days = el("div", { className: "row" });
+      const pieces = new Map(reach.keys.map((k) => [k, null]));
+      for (const k of reach.keys) {
+        const on = el("input", { type: "checkbox", checked: reach.premiere.includes(k) });
+        on.addEventListener("change", () => {
+          ensure();
+          cal.updateDay(k, (x) => { if (on.checked) x.premiere = true; else delete x.premiere; });
+        });
+        const label = el("label", { className: "check" });
+        label.append(on, document.createTextNode(" " + cap(k)));
+        days.append(label);
+      }
+      holder.append(days);
+    } else {
+      const on = el("input", { type: "checkbox", checked: b.premiere === true });
+      on.addEventListener("change", () => {
+        ensure();
+        cal.updateOne((x) => { if (on.checked) x.premiere = true; else delete x.premiere; });
+      });
+      const label = el("label", { className: "check" });
+      label.append(on, document.createTextNode(" New episodes premiere in this slot"));
+      holder.append(label);
+    }
     box.append(holder);
-    holder.append(el("span", { className: "dim", textContent: "Each time this slot comes round it plays the next new episode. The show's other slots play the older episodes in order, and loop; with no new episode left, this one does too." }));
+    const anyOn = reach ? reach.premiere.length > 0 : b.premiere === true;
+    if (!anyOn) return;
+    const cfg = (state.schedule.premieres || {})[show] || { from: "" };
+    holder.append(el("span", { className: "dim", textContent: "Each premiere night plays the next new episode; with no new episode left, it plays the loop too." }));
     const pick = el("select", { ariaLabel: "Where the new episodes start" });
     pick.append(el("option", { value: "", textContent: "Choose where the new episodes start…" }));
     holder.append(el("span", { className: "dim", textContent: "The new episodes start at:" }), pick);
@@ -499,11 +520,11 @@
       group("A season or folder", d.folders, (f) => `${f.path}  (${f.episodes} episodes)`);
       group("An episode", d.episodes, (e) => e);
       pick.value = cfg.from || "";
-      if (cfg.from && pick.value !== cfg.from) pick.append(el("option", { value: cfg.from, textContent: cfg.from + "  (not found)" })), pick.value = cfg.from;
+      if (cfg.from && pick.value !== cfg.from) { pick.append(el("option", { value: cfg.from, textContent: cfg.from + "  (not found)" })); pick.value = cfg.from; }
       holder.append(el("span", { className: "dim", textContent: `${d.total} episodes in ${show}. Everything before the one chosen is the loop; from it on is new.` }));
     }).catch((e) => say(e.message, "err"));
     pick.addEventListener("change", () => {
-      state.schedule.premieres[show] = { from: pick.value, since: iso(new Date()) };       // starting over: the first premiere is the next night
+      prem()[show] = { from: pick.value, since: iso(new Date()) };       // starting over: the first premiere is the next night
       renderProblem();
       schedulePreview();
     });
@@ -562,10 +583,10 @@
     if (reach) row.append(btn("Remove this day", "", () => cal.removeOne()), btn("Split into separate days", "", () => cal.unlink()));
     const v = view();
     if (v && v.columns.length > 1) {
-      row.append(el("span", { className: "dim", textContent: "Same time on:" }));
+      row.append(el("span", { className: "dim", textContent: "Also on, as one slot:" }));
       const others = (pick) => v.columns.map((c) => c.key).filter((k) => k !== s.key && pick(k));
-      const paste = (pick) => () => { const keys = others(pick); if (keys.length) cal.pasteBlockOn(keys, { ...clone(cal.selected().block) }); };
-      row.append(btn("Weekdays", "", paste((k) => !["saturday", "sunday"].includes(k))), btn("Weekend", "", paste((k) => ["saturday", "sunday"].includes(k))), btn("All days", "", paste(() => true)));
+      const link = (pick) => () => { const keys = others(pick); if (keys.length) cal.linkOn(keys); };
+      row.append(btn("Weekdays", "", link((k) => !["saturday", "sunday"].includes(k))), btn("Weekend", "", link((k) => ["saturday", "sunday"].includes(k))), btn("All days", "", link(() => true)));
     }
     box.append(row);
   }

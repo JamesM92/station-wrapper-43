@@ -150,16 +150,27 @@
   // A block without its span id: what Copy / paste carries (a pasted piece is a slot of its own).
   function plain(b) { const { span, ...r } = clone(b); return r; }
 
+  // The same, on the given day keys (not necessarily next to each other): the weekend, say. The slot being copied from
+  // (`from`..`to` on day `home`) gets the id too, so all of them are one slot.
+  function paintKeys(days, keys, home, from, to, payload, id) {
+    const out = clone(days), all = [...new Set([home, ...keys])];
+    if (all.length === 1) return out;
+    id = id || newSpan();
+    for (const k of all) out[k] = paint(out[k] || [], from, to, { ...payload, span: id });
+    return out;
+  }
+
   // The days a slot is on (keys, in day order), its time on the first, and how many days: {keys, from, to, days} or null.
   function spanBounds(days, order, id) {
     const p = spanPieces(days, order, id);
     if (!p.length) return null;
-    return { keys: p.map((x) => x.key), from: p[0].block.from, to: p[0].block.to, days: p.length };
+    return { keys: p.map((x) => x.key), from: p[0].block.from, to: p[0].block.to, days: p.length,
+             premiere: p.filter((x) => x.block.premiere).map((x) => x.key) };
   }
 
   function clock(h) { return `${String(Math.floor(h)).padStart(2, "0")}:${h % 1 ? "30" : "00"}`; }
 
-  root.CalendarOps = { paint, remove, resize, place, tidy, problem, clock, paintSame, spanPieces, cleanSpans, updateSpan, removeSpan, unlinkSpan, plain, spanBounds, newSpan };
+  root.CalendarOps = { paint, remove, resize, place, tidy, problem, clock, paintSame, paintKeys, spanPieces, cleanSpans, updateSpan, removeSpan, unlinkSpan, plain, spanBounds, newSpan };
 
   // ---- the grid (browser only)
   if (typeof document === "undefined") return;
@@ -592,6 +603,37 @@
     };
     document.addEventListener("keydown", onKey);
 
+    // put the selected slot at the same time on these days too, as one slot with it (settings and resizes follow)
+    function linkOn(keys) {
+      const s = selected();
+      if (!s || !spanOn()) return;
+      const { span, premiere, ...payload } = rest(s.block);
+      const out = CalendarOps.paintKeys(daysMap(), keys, s.key, s.block.from, s.block.to, payload, s.block.span || undefined);
+      if (premiere) {
+        const home = out[s.key].find((x) => x.from <= s.block.from && s.block.from < x.to);
+        if (home) home.premiere = true;
+      }
+      applyDays(out);
+      settle();
+      const i = blocksOf(s.key).findIndex((x) => x.from <= s.block.from && s.block.from < x.to);
+      cal.sel = { key: s.key, i };
+      render();
+      opts.onChange();
+      opts.onSelect && opts.onSelect(cal.sel);
+    }
+
+    // change the piece of the selected slot that is on one of its days (a setting that belongs to one day: the premiere)
+    function updateDay(key, fn) {
+      const s = selected();
+      if (!s) return;
+      const piece = s.block.span ? CalendarOps.spanPieces(daysMap(), order(), s.block.span).find((p) => p.key === key) : (key === s.key ? { block: s.block } : null);
+      if (!piece) return;
+      fn(piece.block);
+      applyDays(daysMap());
+      render();
+      opts.onChange();
+    }
+
     // take just the selected day out of a slot on several days (the others stay a slot)
     function removeOne() {
       const s = selected();
@@ -615,7 +657,7 @@
       opts.onSelect && opts.onSelect(cal.sel);
     };
 
-    Object.assign(cal, { render, selected, selectedSpan, unlink, updateOne, removeOne, removeSelected, copySelected, pasteBlockOn, update, clearSelection: () => select(null),
+    Object.assign(cal, { render, selected, selectedSpan, unlink, updateOne, updateDay, linkOn, removeOne, removeSelected, copySelected, pasteBlockOn, update, clearSelection: () => select(null),
       hasClip: () => !!clip.value, clipKind: () => (clip.value ? clip.value.kind : null) });
     return cal;
   }
