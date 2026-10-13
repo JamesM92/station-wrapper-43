@@ -517,8 +517,8 @@
     const b = s.block;
     const reach = cal.selectedSpan();
     if (reach) {
-      box.append(el("strong", { textContent: `${cap(reach.from.key)} ${CalendarOps.clock(reach.from.h)} – ${cap(reach.to.key)} ${CalendarOps.clock(reach.to.h)}` }),
-        el("span", { className: "dim", textContent: `One slot across ${reach.days} days: what you choose here is the same on every day of it. Drag its first or last edge to change when it starts or ends.` }));
+      box.append(el("strong", { textContent: `${CalendarOps.clock(reach.from)} – ${CalendarOps.clock(reach.to)}, ${reach.keys.map(cap).join(", ")}` }),
+        el("span", { className: "dim", textContent: `One slot on ${reach.days} days: what you choose here, and its time, is the same on every day of it. Drag it sideways to put it on more days (hold Alt to move it instead).` }));
     } else {
       box.append(el("strong", { textContent: `${CalendarOps.clock(b.from)} – ${CalendarOps.clock(b.to)}` + (s.key === "every" ? "" : `, ${cap(s.key)}`) }));
     }
@@ -559,7 +559,7 @@
     const row = el("div", { className: "row" });
     const btn = (label, cls, fn) => { const x = el("button", { type: "button", className: "btn " + cls, textContent: label }); x.addEventListener("click", fn); return x; };
     row.append(btn(reach ? "Delete all days" : "Delete", "danger", () => cal.removeSelected()), btn("Copy", "", () => cal.copySelected()));
-    if (reach) row.append(btn("Split into separate days", "", () => cal.unlink()));
+    if (reach) row.append(btn("Remove this day", "", () => cal.removeOne()), btn("Split into separate days", "", () => cal.unlink()));
     const v = view();
     if (v && v.columns.length > 1) {
       row.append(el("span", { className: "dim", textContent: "Same time on:" }));
@@ -584,7 +584,7 @@
 
   function renderLayerNote() {
     const note = $("layer-note");
-    if (state.layer === "videos") note.textContent = "Times snap to half hours. A slot that starts or ends at half past can hold only one list. Drag a slot's top or bottom edge sideways onto another day to make it one slot that runs across days, with the same lists, cards and captions on each.";
+    if (state.layer === "videos") note.textContent = "Times snap to half hours. A slot that starts or ends at half past can hold only one list. Drag a slot sideways onto another day (or draw across several days) to put it at the same time on each, as one slot with the same lists, cards and captions; resizing one resizes them all.";
     else if (state.layer === "cards") note.textContent = "Mid cards for a time period, by the hour: the list played at the start of a break and the one at its end (they can be the same). A video slot with cards of its own (choose it on the Videos tab) uses those; hours you leave empty use the station's own two lists (below)" +
       ($("f-cards").checked ? "." : ", which are switched off: those hours have no cards, and a block you draw here turns cards on for its hours.");
     else note.textContent = "Commercials are chosen by the hour, for the hours that have videos. Hours you leave empty use the station's own commercial list (below)" +
