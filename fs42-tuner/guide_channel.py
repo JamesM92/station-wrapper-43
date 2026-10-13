@@ -83,6 +83,8 @@ MIN_MOVING = 36                     # pixels: a cell narrower than this shows th
 MIN_LAP = 8.0                       # seconds: no name goes round faster than this to be read, however quick the vertical scroll
 STILL_CYCLE = 40.0                  # seconds one round is taken to last when the guide is not scrolling up (it all fits)
 SPEEDS = {"slow": 0.6, "normal": 1.0, "fast": 1.8}
+READABLE = 1.4                      # a cell narrower than this many row heights can't be read: a run of them is merged into one
+ROTATE = 3.0                        # seconds each clip's name of a merged cell is shown before the next
 
 
 # ---- options -----------------------------------------------------------------------------------------------
@@ -322,13 +324,14 @@ class Guide:
         board = Image.new("RGBA", (W, max(self.row_h * len(rows), 1)), (0, 0, 0, 0))
         d = ImageDraw.Draw(board, "RGBA")
         marquees = []                                     # titles too long for their cell: they scroll (see frame())
+        rotors = []                                       # the names of a merged cell: one is shown at a time (see frame())
         for i, r in enumerate(rows):
             y = i * self.row_h
             d.rectangle([0, y, W, y + self.row_h], fill=th["row_a"] if i % 2 == 0 else th["row_b"])
             d.text((int(W * 0.012), y + int(self.row_h * 0.08)), r["number"] or "", font=self.f_num, fill=th["text"])
             d.text((int(W * 0.012), y + int(self.row_h * 0.58)), _clip(d, r["name"], self.f_name, self.label_w - int(W * 0.02)),
                    font=self.f_name, fill=th["dim"])
-            for it in r["items"]:
+            for it in self._cells(r["items"], t0, t1, grid_x, pps):
                 a, b = max(it["start"], t0), min(it["end"], t1)
                 x0, x1 = grid_x + int((a - t0).total_seconds() * pps), grid_x + int((b - t0).total_seconds() * pps)
                 if x1 - x0 < 6:
@@ -344,6 +347,9 @@ class Guide:
                                     corners=(round_left, round_right, round_right, round_left))
                 pad = int(self.row_h * 0.14)
                 room = x1 - x0 - 2 * pad
+                if it.get("names"):                                  # a run of clips too narrow to read, as one cell
+                    self._merged(d, rotors, it, t0, x0, x1, y, pad, room)
+                    continue
                 # the show's name, big; a name too long for its slot moves along the cell and is not cut off
                 self._line(d, marquees, ("◂ " if it["start"] < t0 else "") + it["title"], self.f_cell, th["text"], x0 + pad, y + int(self.row_h * 0.12), room)
                 # then the time and, on the same line and in the same small type, the episode's name (which moves too when it is long)
@@ -370,6 +376,7 @@ class Guide:
             t += timedelta(minutes=30)
         self._board, self._ruler, self._t0, self._pps = board, ruler, t0, pps
         self._marquees = marquees
+        self._rotors = rotors
         # every name that moves goes right through its cell LAPS times while the board scrolls up once (so they are all
         # in step and none is still half read when the rows move on); when it all fits and nothing scrolls up, a calm pace
         total = board.height
@@ -378,6 +385,36 @@ class Guide:
         else:
             self._lap = STILL_CYCLE / LAPS
         self._rows = len(rows)
+
+    def _cells(self, items, t0, t1, grid_x, pps):
+        """The cells of a row. A run of two or more programmes that are each too narrow to read (a feed of short clips) becomes
+        ONE cell over the whole run, which names its clips in turn; anything else is a cell of its own."""
+        need = self.row_h * READABLE
+
+        def width(it):
+            return (min(it["end"], t1) - max(it["start"], t0)).total_seconds() * pps
+
+        cells, run = [], []
+
+        def flush():
+            if len(run) >= 2:
+                names = []
+                for it in run:
+                    if not names or names[-1] != it["title"]:
+                        names.append(it["title"])
+                cells.append({"title": names[0], "sub": "", "start": run[0]["start"], "end": run[-1]["end"],
+                              "names": names, "clips": len(run)})
+            else:
+                cells.extend(run)
+            run.clear()
+        for it in items:
+            if 6 <= width(it) < need:
+                run.append(it)
+            else:
+                flush()
+                cells.append(it)
+        flush()
+        return cells
 
     def _line(self, d, marquees, text, font, fill, x, y, room):
         """One line of text in a cell: drawn as it is when it fits, else set up to move along the cell. A cell too narrow to
@@ -390,6 +427,28 @@ class Guide:
             d.text((x, y), _clip(d, text, font, room), font=font, fill=fill)
         else:
             marquees.append(self._marquee(d, text, font, fill, x, y, room))
+
+    def _merged(self, d, rotors, it, t0, x0, x1, y, pad, room):
+        """The inside of a merged cell: the clips' names one after another (each drawn once here, shown in turn by frame(); a
+        name too long for the cell moves along it while it is up), and under them the time it covers and how many clips."""
+        th = self.theme
+        names = ["◂ " + n if it["start"] < t0 and i == 0 else n for i, n in enumerate(it["names"])]
+        h = int(self.f_cell.size * 1.45) if hasattr(self.f_cell, "size") else int(self.row_h * 0.4)
+        shown, starts, at = [], [], 0.0
+        for n in names:
+            w = int(d.textlength(n, font=self.f_cell))
+            strip = Image.new("RGBA", (max(w, room, 1), h), (0, 0, 0, 0))
+            ImageDraw.Draw(strip).text((0, 0), n, font=self.f_cell, fill=th["text"])
+            starts.append(at)
+            shown.append({"strip": strip, "over": max(0, w - room)})
+            at += ROTATE if w <= room else ROTATE * 1.6          # a long name stays up longer: it has to be read as it moves
+        rotors.append({"x": x0 + pad, "y": y + int(self.row_h * 0.12), "w": max(room, 1), "h": h, "names": shown,
+                       "starts": starts, "period": at})
+        sy = y + int(self.row_h * 0.58)
+        for label in (f"{it['start']:%-I:%M} – {it['end']:%-I:%M %p}  ·  {it['clips']} clips", f"{it['clips']} clips"):
+            if d.textlength(label, font=self.f_time) <= room:
+                break
+        d.text((x0 + pad, sy), _clip(d, label, self.f_time, room), font=self.f_time, fill=th["dim"])
 
     def _marquee(self, d, text, font, fill, x, y, room):
         """A line as a strip of its own (the text, a gap, the text again), to be cropped to the cell as it moves."""
@@ -424,6 +483,22 @@ class Guide:
                     piece = m["strip"].crop((off, 0, off + m["w"], m["h"]))
                 view.alpha_composite(piece, (m["x"], y)) if y >= 0 else view.alpha_composite(piece.crop((0, -y, piece.width, piece.height)), (m["x"], 0))
 
+    def _draw_rotors(self, view, t, shifts):
+        """The name each merged cell is showing at t seconds (and how far along the cell it has moved, when it is long)."""
+        for m in self._rotors:
+            phase = t % m["period"]
+            i = max(k for k, st in enumerate(m["starts"]) if st <= phase)
+            end = m["starts"][i + 1] if i + 1 < len(m["starts"]) else m["period"]
+            name = m["names"][i]
+            into = (phase - m["starts"][i]) / max(end - m["starts"][i], 0.001)
+            off = 0 if not name["over"] or into < 0.2 else int(min((into - 0.2) / 0.6, 1.0) * name["over"])
+            piece = name["strip"].crop((off, 0, off + m["w"], m["h"]))
+            for shift in shifts:
+                y = m["y"] + shift
+                if y + m["h"] <= 0 or y >= self.view_h:
+                    continue
+                view.alpha_composite(piece, (m["x"], y)) if y >= 0 else view.alpha_composite(piece.crop((0, -y, piece.width, piece.height)), (m["x"], 0))
+
     # -- one frame
     def frame(self, t, now=None):
         now = now or self.now()
@@ -442,12 +517,14 @@ class Guide:
         elif total <= self.view_h:
             view.alpha_composite(self._board, (0, 0))
             self._draw_marquees(view, t, [0])
+            self._draw_rotors(view, t, [0])
         else:
             gap = self.row_h
             offset = int(t * 30 * self.opts["scroll_speed"]) % (total + gap)
             view.alpha_composite(self._board, (0, -offset))
             view.alpha_composite(self._board, (0, total + gap - offset))
             self._draw_marquees(view, t, [-offset, total + gap - offset])
+            self._draw_rotors(view, t, [-offset, total + gap - offset])
         img.alpha_composite(view, (0, top))
         # the line for the time now
         nx = self.label_w + int((now - self._t0).total_seconds() * self._pps)

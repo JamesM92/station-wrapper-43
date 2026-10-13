@@ -129,6 +129,39 @@ class CornersTest(unittest.TestCase):
         self.assertNotEqual(corner(grid_right, 1), inside(grid_right, 1))                # ends exactly where the grid ends: it does not run on, so rounded
 
 
+class MergedClipsTest(unittest.TestCase):
+    """A feed of short clips is one cell that names them in turn, instead of many cells too small to read."""
+
+    def guide(self, items):
+        def rows(a, b):
+            return [{"number": "7", "name": "Clips", "items": [dict(i, start=a + timedelta(minutes=i["at"]), end=a + timedelta(minutes=i["at"] + i["len"])) for i in items]}]
+        return gc.Guide(gc.options({"messages": ["x"]}), (1280, 720), rows_fn=rows, now=lambda: NOW)
+
+    def test_a_run_of_narrow_clips_is_one_cell_that_names_each_clip_in_turn(self):
+        items = [{"title": "Long Show Part 3", "at": 0, "len": 40}] + \
+                [{"title": f"Clip {n}", "at": 40 + n * 2, "len": 2} for n in range(10)]
+        g = self.guide(items)
+        def row(t):                                                            # the picture of the first row only (the clock and ticker move)
+            f = g.frame(t)
+            top = g.header_h + g.ruler_h
+            return f[top * 1280 * 3:(top + g.row_h) * 1280 * 3]
+        a = row(0)
+        self.assertEqual(len(g._rotors), 1)
+        self.assertEqual(len(g._rotors[0]["names"]), 10)                      # one name per clip
+        self.assertNotEqual(a, row(gc.ROTATE))                                 # the next clip's name is up a few seconds later
+        self.assertEqual(a, row(g._rotors[0]["period"]))                       # and it comes round
+
+    def test_a_lone_narrow_clip_and_wide_ones_are_left_alone(self):
+        g = self.guide([{"title": "A", "at": 0, "len": 30}, {"title": "B", "at": 30, "len": 2}, {"title": "C", "at": 32, "len": 28}])
+        g.frame(0)
+        self.assertEqual(g._rotors, [])
+
+    def test_repeated_names_are_not_cycled_through_twice(self):
+        g = self.guide([{"title": "Spot", "at": n * 2, "len": 2} for n in range(5)])
+        g.frame(0)
+        self.assertEqual(len(g._rotors[0]["names"]), 1)
+
+
 class NarrowCellsTest(unittest.TestCase):
     def test_programmes_of_every_length_down_to_seconds_can_be_drawn(self):
         for minutes in (0.05, 0.4, 0.8, 1, 1.5, 2, 2.5, 3, 5, 10):          # 1.5 and 2 used to raise: the video then ended silently
