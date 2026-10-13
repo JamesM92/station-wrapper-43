@@ -307,7 +307,7 @@
     function startResize(ev, key, i, edge) {
       const colEl = opts.host.querySelector(`.cal-col[data-key="${key}"]`);
       cal.sel = { key, i };
-      drag = { type: "resize", key, i, edge, colEl, blocks: clone(blocksOf(key)) };
+      drag = { type: "resize", key, i, edge, colEl, blocks: clone(blocksOf(key)), ci0: order().indexOf(key), cross: false, target: null };
       listen();
     }
 
@@ -364,6 +364,25 @@
       }
     }
 
+    // the reach of a slot whose edge is being dragged onto another day, as ghosts on each day it would cover
+    function reach() {
+      const b = drag.blocks[drag.i], t = drag.target;
+      return drag.edge === "to" ? { ia: drag.ci0, ha: b.from, ib: t.ci, hb: t.h } : { ia: t.ci, ha: t.h, ib: drag.ci0, hb: b.to };
+    }
+    function showReach() {
+      for (const g of opts.host.querySelectorAll(".cal-block.drawing")) g.remove();
+      const { ia, ha, ib, hb } = reach();
+      for (let c = ia; c <= ib; c++) {
+        const col = opts.host.querySelector(`.cal-col[data-key="${order()[c]}"]`);
+        if (!col) continue;
+        const a = c === ia ? ha : 0, z = c === ib ? hb : 24;
+        const g = el("div", { className: "cal-block drawing", textContent: c === ia ? `from ${clock(a)}` : (c === ib ? `to ${clock(z)}` : "") });
+        g.style.top = `${a * 2 * ROW}px`;
+        g.style.height = `${(z - a) * 2 * ROW}px`;
+        col.append(g);
+      }
+    }
+
     function move(ev) {
       if (!drag) return;
       if (drag.type === "move") {
@@ -388,6 +407,24 @@
         }
         return;
       }
+      // an edge dragged sideways onto another day makes the slot run on into that day (later for its end, earlier for its start)
+      const over = spanOn() ? columnAt(ev) : null;
+      const ci = over ? order().indexOf(over.dataset.key) : drag.ci0;
+      if (ci !== drag.ci0 && (drag.edge === "to" ? ci > drag.ci0 : ci < drag.ci0)) {
+        if (!drag.cross) { setBlocks(drag.key, drag.blocks); render(); drag.cross = true; }       // render makes new columns
+        const here = opts.host.querySelector(`.cal-col[data-key="${order()[ci]}"]`);
+        const u = unit();
+        const raw = Math.round(((ev.clientY - here.getBoundingClientRect().top) / ROW / 2) / u) * u;
+        drag.target = { ci, h: drag.edge === "to" ? Math.min(24, Math.max(u, raw)) : Math.min(24 - u, Math.max(0, raw)) };
+        showReach();
+        return;
+      }
+      if (drag.cross) {                                  // back on its own day: an ordinary resize again
+        drag.cross = false;
+        drag.target = null;
+        for (const g of opts.host.querySelectorAll(".cal-block.drawing")) g.remove();
+        drag.colEl = opts.host.querySelector(`.cal-col[data-key="${drag.key}"]`);
+      }
       const t = Math.round(((ev.clientY - drag.colEl.getBoundingClientRect().top) / ROW / 2) / unit()) * unit();
       const out = CalendarOps.resize(drag.blocks, drag.i, drag.edge, Math.min(24, Math.max(0, t)), isFull(), unit());
       setBlocks(drag.key, out);
@@ -400,6 +437,26 @@
       const d = drag;
       drag = null;
       unlisten();
+      if (d.type === "resize" && d.cross && d.target) {         // the slot now runs across days: a piece on each, one id
+        for (const g of opts.host.querySelectorAll(".cal-block.drawing")) g.remove();
+        drag = d;
+        const { ia, ha, ib, hb } = reach();
+        drag = null;
+        const b = d.blocks[d.i];
+        const { span, premiere, ...payload } = rest(b);
+        const out = CalendarOps.paintSpan(daysMap(), order(), ia, ha, ib, hb, payload, b.span || undefined);
+        if (premiere) {                                          // the night it premieres stays on the day it was set on
+          const home = out[d.key].find((x) => x.from <= b.from && b.from < x.to);
+          if (home) home.premiere = true;
+        }
+        applyDays(CalendarOps.cleanSpans(out));
+        const first = blocksOf(order()[ia]).findIndex((x) => x.from <= ha && ha < x.to);
+        cal.sel = { key: order()[ia], i: first };
+        render();
+        opts.onChange();
+        opts.onSelect && opts.onSelect(cal.sel);
+        return;
+      }
       if (d.type === "resize") {
         settle();
         select(d.key, d.i);

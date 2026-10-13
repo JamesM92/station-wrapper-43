@@ -584,7 +584,7 @@
 
   function renderLayerNote() {
     const note = $("layer-note");
-    if (state.layer === "videos") note.textContent = "Times snap to half hours. A slot that starts or ends at half past can hold only one list. Drag from one day to another to make one slot that runs across days, with the same lists, cards and captions on each.";
+    if (state.layer === "videos") note.textContent = "Times snap to half hours. A slot that starts or ends at half past can hold only one list. Drag a slot's top or bottom edge sideways onto another day to make it one slot that runs across days, with the same lists, cards and captions on each.";
     else if (state.layer === "cards") note.textContent = "Mid cards for a time period, by the hour: the list played at the start of a break and the one at its end (they can be the same). A video slot with cards of its own (choose it on the Videos tab) uses those; hours you leave empty use the station's own two lists (below)" +
       ($("f-cards").checked ? "." : ", which are switched off: those hours have no cards, and a block you draw here turns cards on for its hours.");
     else note.textContent = "Commercials are chosen by the hour, for the hours that have videos. Hours you leave empty use the station's own commercial list (below)" +

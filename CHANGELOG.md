@@ -37,8 +37,8 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
   yet the show simply plays from its first episode. It is worked out from the date, so a rebuilt schedule agrees with itself:
   the config names a hidden folder per premiere (`.new.<show>.<n>`) and one for the loop (`.loop.<show>`), which the keeper
   makes and adds to the catalog as the nights come into range.
-- **A slot can run across days.** On the calendar's Videos tab, drag from one day to another (Friday 18:00 to Monday 06:00, say) and
-  it is one slot: a piece on each day with the same lists, mid cards and captions, which you change, delete or split in one go.
+- **A slot can run across days.** On the calendar's Videos tab, drag a slot's bottom edge onto another day (Friday 18:00 to Monday 06:00, say), or its
+  top edge onto an earlier one, or draw from one day to another on empty space, and it is one slot: a piece on each day with the same lists, mid cards and captions, which you change, delete or split in one go.
   Its first and last edge can be dragged; the joins at midnight stay put, and *Split into separate days* makes the pieces
   ordinary slots again. It is a calendar convenience, not a longer show: each day is still built on its own, so a video does not
   carry past midnight.
