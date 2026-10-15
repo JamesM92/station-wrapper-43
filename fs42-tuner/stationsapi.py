@@ -14,6 +14,7 @@ import console_client
 import files as filemgr
 import guide_channel
 import legacy
+import midcards
 import premieres
 import resolver
 import schedules
@@ -272,6 +273,58 @@ class Stations:
         self.horizon = horizon or (lambda: None)
         self._empty_seen = {}                           # list name -> (when looked at, it had no videos)
         self.jobs = Jobs(console, db_path, lists_dir)
+        self._cards = {}                                # station -> {"state": "drawing" | "ok" | "error", "message"} (midcards.py)
+        self._cards_lock = threading.Lock()
+
+    # ---- generated mid cards (midcards.py): drawn in the background, a failure never blocks anything
+    def cards_status(self, name):
+        with self._cards_lock:
+            return dict(self._cards.get(name) or {})
+
+    def _start_cards(self, name, start, end, force=False):
+        """Draw a channel's own mid cards (if they are not already drawn for this name), link them into its break folder and
+        bring them into its catalog. In the background: a card takes a few seconds, and a failure is only remembered
+        (shown on the station's page), never raised: the channel plays its lists as before."""
+        if not self.lists_dir:
+            return
+        try:
+            midcards.link(self.lists_dir, name, start, end)          # the folder with the lists in it exists at once
+        except OSError as e:
+            with self._cards_lock:
+                self._cards[name] = {"state": "error", "message": f"could not set up the break folder: {e}"}
+            return
+        with self._cards_lock:
+            if (self._cards.get(name) or {}).get("state") == "drawing":
+                return
+            self._cards[name] = {"state": "drawing", "message": "drawing this channel's mid cards…"}
+
+        def work():
+            try:
+                if force or not midcards.current(self.lists_dir, name):
+                    midcards.draw(self.lists_dir, name)
+                midcards.link(self.lists_dir, name, start, end)
+                note = ""
+                if resolver.coverage(self.db_path, name) is not None:          # it has a catalog to add them to
+                    try:
+                        self.console.update_catalog(name)
+                    except console_client.ConsoleError as e:
+                        note = f" (they join the catalog at its next update: {e})"
+                state = {"state": "ok", "message": "the channel's mid cards are drawn" + note}
+            except (midcards.CardError, OSError) as e:
+                print(f"[cards] {name}: {e}", flush=True)
+                state = {"state": "error", "message": f"could not draw this channel's mid cards ({e}); it plays its lists as before. It is tried again at the next save."}
+            with self._cards_lock:
+                self._cards[name] = state
+        threading.Thread(target=work, daemon=True, name=f"cards-{name}").start()
+
+    def refresh_cards(self):
+        """The keeper's daily look: a channel whose cards are missing or were drawn for another name or an older design gets
+        them again."""
+        if not self.lists_dir:
+            return
+        for name, conf in self.console.stations().items():
+            if conf.get("wrapper_gen_cards") is True and conf.get("wrapper_mid_cards") is not False and not midcards.current(self.lists_dir, name):
+                self._start_cards(name, conf.get("wrapper_start_cards") or "bump", conf.get("wrapper_end_cards") or conf.get("wrapper_start_cards") or "bump")
 
     # ---- reading
     def _coverage(self, name, now):
@@ -389,7 +442,8 @@ class Stations:
         if conf is None:
             raise NotFound(f"there is no station called '{name}'")
         form, why = self._form_of(name, conf, datetime.now().date())
-        return {"name": name, "form": form, "why": why, "conf": {k: v for k, v in conf.items() if not k.startswith("_")}}
+        return {"name": name, "form": form, "why": why, "conf": {k: v for k, v in conf.items() if not k.startswith("_")},
+                "cards": self.cards_status(name)}
 
     # ---- changing
     def _check_music(self, form):
@@ -464,6 +518,8 @@ class Stations:
                         os.makedirs(list_path(self.lists_dir, name), exist_ok=True)
             except OSError as e:
                 warnings.append(f"the start and end of break cards could not be set up: {e}")
+        if form["kind"] == "standard" and form.get("gen_cards") and self.lists_dir:
+            self._start_cards(form["name"], form["bump"], form.get("bump_end", form["bump"]))
         if "schedule" in form and form["kind"] == "standard":
             schedules.put(form["name"], form["schedule"], skipped=self._empty_lists(names=sf.lists_used(form), fresh=True))   # the editor's own copy: seasons, special days, commercials
         else:
@@ -488,6 +544,9 @@ class Stations:
         had_schedule = resolver.coverage(self.db_path, old) is not None
         conf = {k: v for k, v in stations[old].items() if not k.startswith("_")}
         conf["network_name"] = new
+        gen = conf.get("wrapper_gen_cards") is True and self.lists_dir
+        if gen:
+            conf["bump_dir"] = midcards.folder_name(new)             # its break folder is named after it
         if had_schedule:
             if self.db_path:
                 legacy.snapshot(self.db_path, old, as_name=new)      # the channel keeps its old programming under the new name
@@ -498,14 +557,20 @@ class Stations:
             raise console_client.ConsoleError(f"{e}" + (" (its schedule was already cleared: use Rebuild to make a new one)"
                                                         if had_schedule else ""))
         schedules.move(old, new)
+        if gen:
+            midcards.forget(self.lists_dir, old)
+            self._start_cards(new, conf.get("wrapper_start_cards") or "bump", conf.get("wrapper_end_cards") or conf.get("wrapper_start_cards") or "bump")
         job = self.jobs.start(new, 7, rebuild=True) if had_schedule else None
         return {"name": new, "old": old, "job": job}
 
     def delete(self, name):
         if name not in self.console.stations():
             raise NotFound(f"there is no station called '{name}'")
+        gen = self.console.stations().get(name, {}).get("wrapper_gen_cards") is True
         self.console.delete(name)
         schedules.drop(name)
+        if gen and self.lists_dir:
+            midcards.forget(self.lists_dir, name)
 
         return {"name": name}
 

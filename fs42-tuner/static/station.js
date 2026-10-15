@@ -810,12 +810,18 @@
     $("save-build").hidden = $("build-note").hidden = kind() === "guide";      // a guide channel is drawn live: nothing to build
   }
   document.querySelectorAll("input[name=kind]").forEach((r) => r.addEventListener("change", showKind));
+  // how the drawing of this channel's own mid cards is going (it happens in the background after a save)
+  function showCardsNote(c) {
+    $("f-gen-note").textContent = c && c.message ? c.message : "";
+    $("f-gen-note").className = "hint" + (c && c.state === "error" ? " bad" : "");
+  }
+
   function breaksChanged() {
     const on = $("f-com").checked;
     $("f-comlist-box").hidden = !on;
     // the defaults are opt in: their choices are only shown while they are on. Times of day and slots that choose commercials
     // or cards of their own are opted in already, so the break settings below stay.
-    for (const id of ["f-bump", "f-bumpend"]) $(id).closest(".field").hidden = !$("f-cards").checked;
+    for (const id of ["f-bump", "f-bumpend", "f-gen"]) $(id).closest(".field").hidden = !$("f-cards").checked;
     if (state.schedule) renderLayerNote();
   }
   $("f-com").addEventListener("change", breaksChanged);
@@ -833,6 +839,7 @@
       form.bump = $("f-bump").value;
       form.bump_end = $("f-bumpend").value;
       form.midcards = $("f-cards").checked;
+      form.gen_cards = $("f-cards").checked && $("f-gen").checked;
       form.commercials = $("f-com").checked ? $("f-comlist").value : "";
     } else if (form.kind === "guide") {
       form.guide = {
@@ -869,6 +876,7 @@
       fields.bumpEnd.set(form.bump_end || form.bump);
       $("f-com").checked = !!form.commercials;
       $("f-cards").checked = form.midcards !== false;
+      $("f-gen").checked = form.gen_cards === true;
       fields.commercials.set(form.commercials || (state.lists.includes("commercials") ? "commercials" : state.lists[0]));
       breaksChanged();
     } else if (form.kind === "guide") {
@@ -969,6 +977,7 @@
     if (original) {
       $("title").textContent = original;
       const got = await call(`/api/stations/get?name=${encodeURIComponent(original)}`);
+      showCardsNote(got.cards);
       $("f-name").disabled = true;
       $("name-hint").textContent = "To rename a station, use Rename on the Stations page: it also rebuilds the schedule under the new name.";
       if (!got.form) {

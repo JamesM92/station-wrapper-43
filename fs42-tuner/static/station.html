@@ -114,6 +114,11 @@
             <span class="hint">Short clips (like a "welcome back") played at the end of each break, just before the show returns. It can be the same list as the start cards.</span>
           </div>
           <div class="field">
+            <label class="check"><input type="checkbox" id="f-gen"> Also draw cards for this channel</label>
+            <span class="hint">Adds two cards made from this channel's name (<b>Station Wrapper 43</b> and the name in turning 3D letters, and "We'll be right back" or "We're back with more" along the bottom) to the lists above: each break picks from your lists and these like any other card. Your lists are not changed, so a list shared with other channels stays as it is. They are drawn when you save (a few seconds, in the background) and again if the channel is renamed. Letters the font does not have (such as Japanese) are drawn as boxes.</span>
+            <span class="hint" id="f-gen-note"></span>
+          </div>
+          <div class="field">
             <label class="check"><input type="checkbox" id="f-com"> Default commercials</label>
             <input type="hidden" id="f-comlist"><div id="f-comlist-box" hidden></div>
             <span class="hint">Off (the default for a new station): there are no breaks. Videos play back to back, the next one starting as soon as one ends, and the time slots are only a soft target that the day is filled to with videos from the lists, except in hours where you gave the calendar's <b>Commercials</b> tab a list: choosing one there is the opt in for those hours. On: the spare time in each slot is filled with clips from the list chosen here, at the breaks set above, in every hour that has none of its own.</span>

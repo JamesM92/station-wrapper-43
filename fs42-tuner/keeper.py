@@ -67,6 +67,11 @@ class Keeper:
         except Exception as e:                                  # never stop the keeper's real job for this
             self.log(f"[keeper] could not update the special days: {e}")
         try:
+            if hasattr(self.api, "refresh_cards"):             # a channel's drawn mid cards that are missing or out of date
+                self.api.refresh_cards()
+        except Exception as e:
+            self.log(f"[keeper] could not check the generated mid cards: {e}")
+        try:
             stations = self.api.console.stations()
         except console_client.ConsoleError as e:
             stations, error = {}, str(e)

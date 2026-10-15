@@ -808,5 +808,85 @@ class BuiltCallbackTest(unittest.TestCase):
         self.assertEqual(failed, [])                              # a failed build changes nothing in the guide
 
 
+class GeneratedCardsApiTest(Base):
+    """A channel's own mid cards (midcards.py): set up on save, in the background, never blocking, and cleaned up."""
+
+    def setUp(self):
+        super().setUp()
+        import midcards
+        self.mc = midcards
+        self._draw = midcards.draw
+        self.drawn = []
+
+        def fake(lists_dir, name, log=print):
+            os.makedirs(os.path.join(lists_dir, midcards.GEN_DIR), exist_ok=True)
+            for kind in ("start", "end"):
+                open(os.path.join(lists_dir, midcards.GEN_DIR, midcards.clip_name(name, kind)), "w").close()
+            data = midcards._manifest(lists_dir)
+            data[midcards.key(name)] = {"name": name, "version": midcards.VERSION}
+            midcards._save_manifest(lists_dir, data)
+            self.drawn.append(name)
+        midcards.draw = fake
+
+    def tearDown(self):
+        self.mc.draw = self._draw
+        super().tearDown()
+
+    def wait(self, name):
+        end = time.time() + 5
+        while self.api.cards_status(name).get("state") == "drawing" and time.time() < end:
+            time.sleep(0.02)
+        return self.api.cards_status(name)
+
+    def test_saving_with_the_option_draws_links_and_leaves_the_lists_alone(self):
+        self.api.save(None, form(midcards=True, gen_cards=True, bump="bump", bump_end="bump"))
+        self.assertEqual(self.wait("Cartoons")["state"], "ok")
+        conf = self.console.confs["Cartoons"]
+        self.assertEqual(conf["bump_dir"], self.mc.folder_name("Cartoons"))
+        pre = os.path.join(self.lists, conf["bump_dir"], "pre")
+        self.assertEqual(sorted(os.listdir(pre)), sorted(["list", self.mc.clip_name("Cartoons", "start")]))
+        self.assertEqual(os.listdir(os.path.join(self.lists, "bump")), ["b.mp4"])           # the shared list was not added to
+        self.assertTrue(self.api.get("Cartoons")["form"]["gen_cards"])
+
+    def test_a_card_that_cannot_be_drawn_never_stops_the_save(self):
+        def boom(lists_dir, name, log=print):
+            raise self.mc.CardError("ffmpeg is not here")
+        self.mc.draw = boom
+        out = self.api.save(None, form(midcards=True, gen_cards=True))
+        self.assertEqual(out["name"], "Cartoons")
+        got = self.wait("Cartoons")
+        self.assertEqual(got["state"], "error")
+        self.assertIn("ffmpeg is not here", got["message"])
+        self.assertIn("Cartoons", self.console.confs)
+
+    def test_rename_moves_the_cards_and_delete_takes_them_away(self):
+        self.api.save(None, form(midcards=True, gen_cards=True))
+        self.wait("Cartoons")
+        old = self.mc.folder_name("Cartoons")
+        self.api.rename("Cartoons", "Cartoons Late")
+        self.wait("Cartoons Late")
+        self.assertEqual(self.console.confs["Cartoons Late"]["bump_dir"], self.mc.folder_name("Cartoons Late"))
+        self.assertFalse(os.path.exists(os.path.join(self.lists, old)))
+        self.assertTrue(os.path.exists(os.path.join(self.lists, self.mc.GEN_DIR, self.mc.clip_name("Cartoons Late", "start"))))
+        self.api.delete("Cartoons Late")
+        self.assertFalse(os.path.exists(os.path.join(self.lists, self.mc.GEN_DIR, self.mc.clip_name("Cartoons Late", "start"))))
+        self.assertFalse(os.path.exists(os.path.join(self.lists, self.mc.folder_name("Cartoons Late"))))
+
+    def test_the_keepers_look_draws_cards_that_went_missing(self):
+        self.api.save(None, form(midcards=True, gen_cards=True))
+        self.wait("Cartoons")
+        for f in os.listdir(os.path.join(self.lists, self.mc.GEN_DIR)):
+            os.unlink(os.path.join(self.lists, self.mc.GEN_DIR, f))
+        self.drawn.clear()
+        self.api.refresh_cards()
+        self.wait("Cartoons")
+        self.assertEqual(self.drawn, ["Cartoons"])
+
+    def test_without_the_option_nothing_is_drawn(self):
+        self.api.save(None, form(midcards=True))
+        self.assertEqual(self.drawn, [])
+        self.assertNotIn("wrapper_gen_cards", self.console.confs["Cartoons"])
+
+
 if __name__ == "__main__":
     unittest.main()

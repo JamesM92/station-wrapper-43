@@ -19,6 +19,7 @@ overrides, sequences, marathons, other station types...) is NOT flattened: parse
 why, and the page shows it read-only with a pointer to the FieldStation42 console.
 """
 import guide_channel
+import midcards
 import os
 import re
 import copy
@@ -37,7 +38,7 @@ ADVANCED_KEYS = ("date_overrides", "slot_overrides", "tag_overrides", "week_over
                  "clip_shows", "autobump", "off_air_autobump", "meta_hints", "fallback_tag", "schedule_offset")
 # what the form owns; everything else in an existing config is kept as it was
 OWNED = ("network_name", "channel_number", "network_type", "content_dir", "bump_dir", "commercial_dir",
-         "commercial_free", "schedule_increment", "day_templates", "shuffle_loop", "break_strategy", "wrapper_break_snap", "wrapper_pack_short", "wrapper_no_breaks", "wrapper_start_cards", "wrapper_end_cards", "wrapper_mid_cards", "wrapper_show_cards", "tag_overrides", "wrapper_logo", "wrapper_caption_track", "wrapper_level_audio") + DAYS
+         "commercial_free", "schedule_increment", "day_templates", "shuffle_loop", "break_strategy", "wrapper_break_snap", "wrapper_pack_short", "wrapper_no_breaks", "wrapper_start_cards", "wrapper_end_cards", "wrapper_mid_cards", "wrapper_gen_cards", "wrapper_show_cards", "tag_overrides", "wrapper_logo", "wrapper_caption_track", "wrapper_level_audio") + DAYS
 MAX_NAME = 100
 OFF_AIR_CLIP = os.environ.get("FS42_OFFAIR_CLIP", "/opt/assets/test-pattern.mp4")      # shipped in the image (assets/)
 
@@ -259,6 +260,7 @@ def validate(form, existing_names=(), existing_numbers=None, original=None):
         bump_end = form.get("bump_end")
         clean["bump_end"] = _list_name(bump_end) if bump_end else clean["bump"]          # blank: the same list for both
         clean["midcards"] = form.get("midcards") is not False     # opt in to the start/end of break cards: on unless said no
+        clean["gen_cards"] = clean["midcards"] and form.get("gen_cards") is True   # a card drawn for this channel (midcards.py); off unless asked
         clean["show_cards"] = _show_cards(form.get("show_cards"))
         com = form.get("commercials") or ""
         clean["commercials"] = _list_name(com) if com else ""
@@ -342,6 +344,12 @@ def to_conf(form, existing=None, today=None, shows=(), skip=(), premieres=None):
         # engine side (console_launch.py) can tell "the default" from "chosen for this break".
         conf["bump_dir"] = OFF_CARDS
         conf["wrapper_start_cards"], conf["wrapper_end_cards"] = form["bump"], form.get("bump_end", form["bump"])
+    elif form.get("gen_cards"):
+        # the lists as chosen plus a card drawn for this channel (midcards.py): the station's own hidden break folder holds a
+        # link to each list and to its clips, so the lists themselves are never changed
+        conf["bump_dir"] = midcards.folder_name(form["name"])
+        conf["wrapper_start_cards"], conf["wrapper_end_cards"] = form["bump"], form.get("bump_end", form["bump"])
+        conf["wrapper_gen_cards"] = True
     elif form.get("bump_end", form["bump"]) != form["bump"]:
         # two lists: the start-of-break cards and the end-of-break cards. FieldStation42 takes "pre" and "post" folders inside
         # one bump folder as the start and end cards, so the station gets a hidden folder of its own that holds the two
@@ -478,7 +486,7 @@ def _parse(conf):
     form = {"name": name, "number": number, "kind": "standard", "logo": conf.get("wrapper_logo") or "", "caption_track": conf.get("wrapper_caption_track") is not False, "level_audio": conf.get("wrapper_level_audio") is not False, "increment": inc, "breaks": breaks,
             "bump": conf.get("wrapper_start_cards") or (conf.get("bump_dir") if conf.get("bump_dir") != OFF_CARDS else None) or "bump", "bump_end": conf.get("wrapper_end_cards") or conf.get("wrapper_start_cards") or (conf.get("bump_dir") if conf.get("bump_dir") != OFF_CARDS else None) or "bump",
             "commercials": commercials, "snap": conf.get("wrapper_break_snap") is True, "midcards": conf.get("wrapper_mid_cards") is not False, "show_cards": show_cards or [],
-            "pack": conf.get("wrapper_pack_short") is not False}
+            "gen_cards": conf.get("wrapper_gen_cards") is True, "pack": conf.get("wrapper_pack_short") is not False}
     form["blocks" if same else "days"] = week[DAYS[0]] if same else week
     return form, None
 
@@ -505,7 +513,7 @@ def parse_base(conf):
                 "bump": conf.get("wrapper_start_cards") or (conf.get("bump_dir") if conf.get("bump_dir") != OFF_CARDS else None) or "bump",
                 "bump_end": conf.get("wrapper_end_cards") or conf.get("wrapper_start_cards") or (conf.get("bump_dir") if conf.get("bump_dir") != OFF_CARDS else None) or "bump", "commercials": commercials,
                 "snap": conf.get("wrapper_break_snap") is True, "midcards": conf.get("wrapper_mid_cards") is not False, "show_cards": show_cards or [],
-                "pack": conf.get("wrapper_pack_short") is not False}, None
+                "gen_cards": conf.get("wrapper_gen_cards") is True, "pack": conf.get("wrapper_pack_short") is not False}, None
     except Exception:
         return None, "its settings are in a shape the form does not understand"
 

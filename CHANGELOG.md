@@ -30,6 +30,13 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
   duplicate warnings (beside the list they are in) and the **Rescan** button are on the Lists & files page, above the lists.
 
 ### Added
+- **Mid cards drawn for a channel.** On the station form, with *Default mid cards* on, *Also draw cards for this channel* adds two
+  cards made from the channel's name (5 seconds, 1280x720: *Station Wrapper 43* and the name in 3D letters that turn a little back
+  and forth, with *We'll be right back* or *We're back with more* flat along the bottom) to the start and end lists. Each break picks
+  from your lists and these like any other card, and your lists are never changed (a list shared by several channels stays as it is):
+  the clips sit together in one hidden folder, and each channel's own hidden break folder links to its two clips and to your chosen
+  lists. They are drawn in the background on save and again on a rename, and a failure only shows a note on the station: it plays its
+  lists as before.
 - **The channel guide merges clips too small to read.** A run of programmes that are each too narrow to show a name (a feed of short
   clips) is drawn as one cell over the whole run, which names its clips in turn (a long name moves along the cell while it is up)
   and says how many clips it holds and the time it covers.
