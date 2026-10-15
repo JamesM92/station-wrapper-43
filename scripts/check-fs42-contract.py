@@ -49,6 +49,10 @@ GENERATOR_EXPECTATIONS = [
     ("fs42/liquid_manager.py", "LiquidManager.reset_sequences (console_launch.py guards it)", r'def reset_sequences\(self, station_config\)'),
     ("fs42/media_processor.py", "MediaProcessor.rich_find_media and _rfind_media (console_launch.py skips dead links)",
      r'def rich_find_media\(path: str, media_filter="video"\)[\s\S]*def _rfind_media\('),
+    ("fs42/sequence.py", "NamedSequence.populate sorts the episodes (console_launch.py puts the natural order in its place)",
+     r'def populate\(self, file_list\)[\s\S]*sorted\(self\.episodes, key=lambda entry: entry\.fpath\)'),
+    ("fs42/sequence_io.py", "SequenceIO.update_sequence_entries (console_launch.py replaces its sort)",
+     r'def update_sequence_entries\(self, station_name: str, sequence_name: str, tag_path: str, file_list: list, current_file: str, fallback_index: int\)'),
     ("station_42.py", "the -s / --server option the console is started with", r'"-s",\s*"--server"'),
 ]
 

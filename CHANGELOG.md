@@ -86,6 +86,9 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
   on the station, else one drawn from its name), and an external source's channel's, when its source or its guide has one.
 
 ### Fixed
+- **Episodes of a show play in natural order.** FieldStation42 orders a show by plain file path, so `Episode 10` played before `Episode 2`
+  and a `Season 10` folder before `Season 2`. Both of its sort steps now compare numbers as numbers (the same order the premiere nights
+  use), and a show that is part way through keeps its place across the change.
 - **Every finding of GitHub's code scanning is fixed in the code** (117, none dismissed). A page's file or list name is joined to its
   folder and checked to stay inside it in one function per module, in a form the scanner follows; the login page's "go back to"
   address is resolved against this server and used only if it stays on it; the caption text is cleaned until no tag is left; the

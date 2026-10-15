@@ -448,7 +448,7 @@ scripts/build_channels.py --media-root /mnt/media --no-default-libraries --tv-li
 
 Tests: `scripts/test_build_channels.py`, `test_init.py`, `test_compose.py`, `test_setup_dirs.py` and `test_fs42_link.py` in `scripts/`; `test_sync.py` in `fs42-sync/`; `test_supervisor.py` in `supervisor/`; and the tuner's own in `fs42-tuner/`.
 
-Not handled yet: episode order within a show. Episodes are scheduled from the genre folder, not as ordered sequences.
+(Episode order within a show is handled: a show in a slot is played in natural order, `Episode 2` before `Episode 10`.)
 
 ## Updating FieldStation42
 

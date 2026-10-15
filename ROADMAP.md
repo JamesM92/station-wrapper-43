@@ -100,9 +100,9 @@ Still open:
 - **Short videos share a slot** (`fieldstation42/console_launch.py`) wraps one FieldStation42 method at run time. Tried on the
   real engine. If FieldStation42's code moves, the console starts unchanged and the log says so; the weekly
   `upstream-compat` workflow checks the method's signature. Watch for it after every `scripts/sync-fs42.sh`.
-- Episodes in a sequence are ordered by plain file path (FieldStation42). `Episode 10` sorts before `Episode 2`, and so does
-  a `Season 10` folder. Zero-padded names are fine. Fix idea: pad the numbers in the link names that show lists make
-  (changes some displayed names). Waiting for a decision.
+- (Done 2026-10-15: episodes of a show are played in natural order, `Episode 2` before `Episode 10` and `Season 2` before `Season 10`.
+  FieldStation42 sorts by plain path in two places; `console_launch.py` puts `ordering.natural_key` in both and a show part way through
+  keeps its place. Untried on the real engine's database: the first start after the update re-reads each sequence's stored order.)
 - Interrupted rebuild after a reboot: **Resume the rebuild** is a button. Auto-resume was left out on purpose (a rebuild that
   keeps failing would restart on every boot); could be added for interruptions only.
 

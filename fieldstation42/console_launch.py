@@ -156,6 +156,79 @@ def patch_dead_links(processor_class):
     return True
 
 
+def _natural_key():
+    """The wrapper's episode order (fs42-tuner/ordering.py): beside this file in the image, in fs42-tuner/ from the repo."""
+    try:
+        import ordering
+    except ImportError:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fs42-tuner"))
+        import ordering
+    return ordering.natural_key
+
+
+def patch_episode_order(sequence_class, io_class):
+    """FieldStation42 orders the episodes of a show by plain file path, so Episode 10 plays before Episode 2 and Season 10 before
+    Season 2. Two places sort: NamedSequence.populate (every time a sequence is loaded) and SequenceIO.update_sequence_entries
+    (when the files change). Both are given the natural order, and a sequence that is loaded keeps its place: the stored index is
+    turned into the file it pointed at, then into that file's index in the new order. Returns True when wrapped."""
+    key = _natural_key()
+    original_populate = sequence_class.populate
+    if getattr(original_populate, "_wrapper_order", False):
+        return True
+
+    def populate(self, file_list):
+        keep = None
+        try:
+            if getattr(self, "initialized", False) and 0 <= self.current_index < len(file_list):
+                keep = str(file_list[self.current_index])      # the stored index is into the order the entries were stored in
+        except Exception:
+            keep = None
+        original_populate(self, file_list)
+        try:
+            self.episodes = sorted(self.episodes, key=lambda entry: key(entry.fpath))
+            if keep is not None:
+                for i, entry in enumerate(self.episodes):
+                    if str(entry.fpath) == keep:
+                        self.current_index = i
+                        break
+        except Exception:                                      # never be the reason a sequence cannot be loaded
+            pass
+
+    populate._wrapper_order = True
+    sequence_class.populate = populate
+
+    original_update = io_class.update_sequence_entries
+
+    def update_sequence_entries(self, station_name, sequence_name, tag_path, file_list, current_file, fallback_index):
+        """FieldStation42's own method, with the natural order in place of its plain sort."""
+        with self._get_connection() as connection:
+            cursor = connection.cursor()
+            cursor.execute("SELECT id FROM named_sequence WHERE station = ? AND sequence_name = ? AND tag_path = ?",
+                           (station_name, sequence_name, tag_path))
+            row = cursor.fetchone()
+            if not row:
+                return
+            named_sequence_id = row[0]
+            ordered = sorted((str(f) for f in file_list), key=key)
+            if current_file and current_file in ordered:
+                new_index = ordered.index(current_file)
+            elif fallback_index < len(ordered):
+                new_index = fallback_index
+            else:
+                new_index = 0
+            cursor.execute("DELETE FROM sequence_entries WHERE named_sequence_id = ?", (named_sequence_id,))
+            for idx, fpath in enumerate(ordered):
+                cursor.execute("INSERT INTO sequence_entries (fpath, sequence_index, named_sequence_id) VALUES (?, ?, ?)",
+                               (fpath, idx, named_sequence_id))
+            cursor.execute("UPDATE named_sequence SET current_index = ? WHERE id = ?", (new_index, named_sequence_id))
+            connection.commit()
+
+    update_sequence_entries._wrapper_order = True
+    update_sequence_entries.__wrapped__ = original_update
+    io_class.update_sequence_entries = update_sequence_entries
+    return True
+
+
 def main(argv):
     app = os.getcwd()
     if app not in sys.path:
@@ -178,6 +251,13 @@ def main(argv):
         print("console: a link to a video that is gone is left out of a catalog rebuild", flush=True)
     except Exception as e:
         print(f"console: could not apply the dead link guard ({e}); a dead link can stop a rebuild", flush=True)
+    try:
+        from fs42.sequence import NamedSequence
+        from fs42.sequence_io import SequenceIO
+        patch_episode_order(NamedSequence, SequenceIO)
+        print("console: the episodes of a show are played in natural order (Episode 2 before Episode 10)", flush=True)
+    except Exception as e:
+        print(f"console: could not apply the episode order ({e}); episodes keep FieldStation42's plain file order", flush=True)
     try:
         from fs42.catalog import ShowCatalog
         patch_mid_cards(ShowCatalog)

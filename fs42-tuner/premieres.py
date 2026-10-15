@@ -14,13 +14,13 @@ import os
 import re
 from datetime import timedelta
 
+import ordering
 import schedules
 
 VIDEO_EXT = {".mp4", ".mov", ".webm", ".avi", ".mkv", ".m4v"}
 
 
-def _natural(text):
-    return [int(p) if p.isdigit() else p.casefold() for p in re.split(r"(\d+)", text)]
+_natural = ordering.natural_key
 
 
 def episodes(show_dir):

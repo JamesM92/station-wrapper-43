@@ -50,6 +50,7 @@ jobs:
           python3 scripts/test_firstrun.py
           python3 scripts/test_pack_short.py
           python3 scripts/test_dead_links.py
+          python3 scripts/test_episode_order.py
           python3 scripts/test_setup_dirs.py
           (cd fs42-sync && python3 test_sync.py)
           (cd supervisor && python3 test_supervisor.py)
