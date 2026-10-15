@@ -249,6 +249,24 @@ def set_loudness(values, path=None):
     return get_loudness(path)
 
 
+# ---- playback (tuner.py)
+def get_playback(path=None):
+    """{"continuous_ts": bool}: whether timestamps carry straight on across pieces (an experiment; off unless switched on here
+    or by the CONTINUOUS_TS environment variable)."""
+    saved = load(path).get("playback")
+    return {"continuous_ts": bool(isinstance(saved, dict) and saved.get("continuous_ts") is True)}
+
+
+def set_playback(values, path=None):
+    path = path or PATH
+    if not isinstance(values, dict) or not isinstance(values.get("continuous_ts"), bool):
+        raise SettingsError("continuous_ts is on or off")
+    data = load(path)
+    data["playback"] = {"continuous_ts": values["continuous_ts"]}
+    _save(path, data)
+    return get_playback(path)
+
+
 # ---- the schedule keeper: keeps every station's schedule running a few days ahead
 DEFAULT_KEEPER = {"enabled": True, "days_ahead": 7}
 DAYS_AHEAD_RANGE = (1, 30)

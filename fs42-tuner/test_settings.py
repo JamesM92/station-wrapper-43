@@ -108,5 +108,16 @@ class VolumeTarget(unittest.TestCase):
                 settings.set_loudness({"target": bad}, path)
 
 
+class PlaybackSettingsTest(unittest.TestCase):
+    def test_continuous_timestamps_are_off_until_switched_on(self):
+        import tempfile, os
+        path = os.path.join(tempfile.mkdtemp(), "settings.json")
+        self.assertEqual(settings.get_playback(path), {"continuous_ts": False})
+        self.assertEqual(settings.set_playback({"continuous_ts": True}, path), {"continuous_ts": True})
+        self.assertEqual(settings.get_playback(path), {"continuous_ts": True})
+        with self.assertRaises(settings.SettingsError):
+            settings.set_playback({"continuous_ts": "yes"}, path)
+
+
 if __name__ == "__main__":
     unittest.main()

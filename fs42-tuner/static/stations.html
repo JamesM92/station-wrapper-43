@@ -61,6 +61,15 @@
       </div>
       <p id="v-status" class="dim"></p>
     </section>
+    <section class="panel" id="playback-panel" aria-label="Playback">
+      <h2>Playback</h2>
+      <p class="dim">Each piece of a channel (a part of a show, a commercial, a card) is its own encode. With <b>continuous timestamps</b> the pieces' clocks carry straight on, so a player sees one unbroken stream instead of a restart at every cut. It is an experiment: compare the <i>Joins</i> card on the dashboard with it off and on. It applies from the next piece.</p>
+      <div class="ta-row">
+        <label class="check"><input type="checkbox" id="p-cont"> Continuous timestamps (experimental)</label>
+        <button type="button" class="btn primary" id="p-save">Save</button>
+      </div>
+      <p id="p-status" class="dim"></p>
+    </section>
     <section id="cards" class="cards" aria-label="Stations"></section>
   </main>
   <script src="/common.js"></script>

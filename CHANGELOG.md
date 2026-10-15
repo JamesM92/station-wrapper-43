@@ -30,6 +30,9 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
   duplicate warnings (beside the list they are in) and the **Rescan** button are on the Lists & files page, above the lists.
 
 ### Added
+- **A switch for continuous timestamps.** The Stations page has a *Playback* panel with **Continuous timestamps (experimental)**, off
+  unless turned on (the `CONTINUOUS_TS` variable still decides when it is set). It is used from the next piece, so you can compare the
+  dashboard's *Joins* card with it off and on before it ever becomes the default.
 - **A preview of the premiere nights.** In the slot editor, under *The new episodes start at*, the next six premiere nights are listed with
   the episode each airs (its title when the library has one, else its file) and a line saying how many new episodes are left and when the
   last one airs, worked out from the schedule as it is being edited, by the same date logic that builds the config.

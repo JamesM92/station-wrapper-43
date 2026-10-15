@@ -137,6 +137,19 @@
     say("Saved. The new target is used from the next programme.", "ok");
   }));
 
+  // ---- playback
+  async function loadPlayback() {
+    const p = await call("/api/playback");
+    $("p-cont").checked = p.on;
+    $("p-cont").disabled = $("p-save").disabled = !editable || p.env;
+    $("p-status").textContent = p.env ? "Set by the CONTINUOUS_TS environment variable, so it can't be changed here." : "";
+  }
+  $("p-save").addEventListener("click", () => run(async () => {
+    await call("/api/playback/settings", { continuous_ts: $("p-cont").checked });
+    await loadPlayback();
+    say("Saved. It is used from the next piece.", "ok");
+  }));
+
   // ---- the caption language
   async function loadCaptions() {
     const c = await call("/api/captions");
@@ -165,6 +178,7 @@
     for (const s of data.stations) box.append(card(s));
     loadKeeper(!loadedKeeper).then(() => { loadedKeeper = true; }).catch(() => {});
     loadCaptions().catch(() => {});
+    loadPlayback().catch(() => {});
     loadVolume().catch(() => {});
     if (!editable) say("Changing stations is switched off on this server (DASHBOARD_EDIT=0). You can still look.", "err");
   }

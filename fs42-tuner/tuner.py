@@ -260,7 +260,19 @@ def media_path(rel):
     return rel if os.path.isabs(rel) else os.path.join(CATALOG_ROOT, rel)
 
 
-CONTINUOUS_TS = os.environ.get("CONTINUOUS_TS", "0").strip().lower() in ("1", "true", "yes", "on")
+_CONT_ENV = os.environ.get("CONTINUOUS_TS", "").strip().lower()
+
+
+def continuous_ts():
+    """Do timestamps carry straight on across pieces (one continuous stream)? The CONTINUOUS_TS environment variable decides
+    when it is set; else the dashboard's switch (settings.json), off unless turned on. Read at each piece, so a change is used
+    from the next one."""
+    if _CONT_ENV:
+        return _CONT_ENV in ("1", "true", "yes", "on")
+    try:
+        return settings.get_playback()["continuous_ts"]
+    except Exception:
+        return False
 
 
 def _continuous(mux):
@@ -754,7 +766,7 @@ class Channel:
             if warm is not None:
                 sent = self._pipe(None, label=name, cached=pinned, inject=inject, proc=warm["proc"])
             else:
-                sent = self._pipe(segment_cmd(play, cur.seek, cur.remaining, entry.is_stream, self.clock if CONTINUOUS_TS else None,
+                sent = self._pipe(segment_cmd(play, cur.seek, cur.remaining, entry.is_stream, self.clock if continuous_ts() else None,
                                               text=offair, subs=subs,
                                               ordered=inject is not None,
                                               audio=audio_level_filter(self.station, entry, path)),
@@ -890,7 +902,7 @@ class Channel:
             began = time.time()
             subs = caption_filter(self.station, e, path, local, e.skip)
             inject_ok = caption_injector(self.station, e, path, e.skip) is not None
-            cmd = segment_cmd(stream_url or local, e.skip, nxt.remaining + nxt.offset, False, clock_next if CONTINUOUS_TS else None, text=offair,
+            cmd = segment_cmd(stream_url or local, e.skip, nxt.remaining + nxt.offset, False, clock_next if continuous_ts() else None, text=offair,
                               subs=subs, ordered=inject_ok, audio=audio_level_filter(self.station, e, path), lead=lead)
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
             with self._warm_lock:
@@ -2107,6 +2119,19 @@ class Handler(BaseHTTPRequestHandler):
             except OSError as e:
                 return self._json({"error": f"could not save the settings: {e.strerror}"}, 500)
             return self._json({"settings": got, "status": LEVELS.status()})
+        if p == "/api/playback/settings":
+            body = self._json_body()
+            if body is None:
+                return None
+            if not EDIT_FILES:
+                return self._json({"error": "changing settings is switched off (DASHBOARD_EDIT=0)"}, 403)
+            try:
+                got = settings.set_playback(body)
+            except settings.SettingsError as e:
+                return self._json({"error": str(e)}, 400)
+            except OSError as e:
+                return self._json({"error": f"could not save the settings: {e.strerror}"}, 500)
+            return self._json({"settings": got, "env": bool(_CONT_ENV)})
         if p == "/api/captions/settings":
             body = self._json_body()
             if body is None:
@@ -2371,6 +2396,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"settings": settings.get_loudness(), "status": LEVELS.status(), "edit": EDIT_FILES})
         if p == "/api/captions":
             return self._json({"settings": settings.get_captions(), "edit": EDIT_FILES})
+        if p == "/api/playback":
+            return self._json({"settings": settings.get_playback(), "env": bool(_CONT_ENV), "on": continuous_ts(), "edit": EDIT_FILES})
 
         if p.startswith("/api/iptv/"):
             return self._iptv_api(p)
