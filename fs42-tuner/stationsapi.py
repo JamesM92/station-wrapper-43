@@ -19,6 +19,7 @@ import premieres
 import resolver
 import schedules
 import stationform as sf
+import titles
 import stations as stationlib
 
 VIDEO_EXT = {".mp4", ".mov", ".webm", ".avi", ".mkv", ".m4v"}
@@ -396,6 +397,41 @@ class Stations:
             return None, []
         plans = premieres.plan(defn, self.lists_dir, today)
         return plans, (premieres.sync(self.lists_dir, plans) if make else [])
+
+    def premiere_preview(self, raw, count=6, today=None):
+        """For each show with a premiere night in a schedule being edited (not saved): the next `count` nights with the episode
+        each airs (its own title when the library has one), and how many new episodes are left and when the last airs. Worked
+        out by the same date logic that builds the config, so it cannot disagree with it."""
+        from datetime import date, timedelta
+        try:
+            defn = schedules.validate(raw)
+        except schedules.ScheduleError as e:
+            raise sf.FormError(str(e))
+        today = today or date.today()
+        out = {}
+        plans = premieres.plan(defn, self.lists_dir, today) if self.lists_dir and defn.get("premieres") else {}
+        for show, p in plans.items():
+            new = p["new_paths"]
+            nights = schedules.premiere_dates(defn, show, today, today + timedelta(days=730))
+            first = schedules.premiere_index(defn, show, today)
+            left = max(0, len(new) - first)
+            rows = []
+            for d in nights[:count]:
+                k = schedules.premiere_index(defn, show, d)
+                rel = new[k] if k < len(new) else None
+                title = None
+                if rel:
+                    try:
+                        t, ep = titles.names_for(os.path.join(self.lists_dir, show, *rel.split("/")))
+                        title = ep or t
+                    except Exception:
+                        title = None
+                rows.append({"date": d.isoformat(), "weekday": schedules.DAYS[d.weekday()], "kind": "new" if rel else "loop",
+                             "episode": rel, "title": title})
+            last = nights[left - 1].isoformat() if 0 < left <= len(nights) else None
+            out[show] = {"nights": rows, "new_total": len(new), "new_left": left, "last": last,
+                         "start_set": bool((defn["premieres"].get(show) or {}).get("from"))}
+        return out
 
     def show_episodes(self, name):
         """What a show (a list) is made of, for choosing where its new episodes start: its folders and its episodes, in order."""

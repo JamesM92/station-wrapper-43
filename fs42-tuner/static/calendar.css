@@ -58,3 +58,6 @@
 .chooser-rows { max-height: 16em; overflow: auto; display: grid; gap: 0.15em; }
 .chooser-row { display: flex; justify-content: space-between; align-items: center; gap: 0.5em; padding: 0.15em 0.2em; border-bottom: 1px solid var(--line); }
 .chooser-row .btn { flex: none; }
+
+.premiere-preview { display: grid; gap: 0.15em; margin-top: 0.4em; font-size: 0.9em; }
+.premiere-preview .night.loop { opacity: 0.6; }

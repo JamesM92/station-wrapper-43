@@ -2019,6 +2019,8 @@ class Handler(BaseHTTPRequestHandler):
                 raise filemgr.FileError("no such call", 404)
             if not EDIT_FILES:
                 raise filemgr.FileError("changing stations is switched off (DASHBOARD_EDIT=0)", 403)
+            if action == "stations/premiere-preview":
+                return self._json({"shows": STATIONS.premiere_preview(body.get("schedule"))})
             if action == "stations/schedule-preview":
                 return self._json(STATIONS.preview(body.get("schedule")))
             if action == "stations/quickstart":

@@ -523,6 +523,26 @@
       if (cfg.from && pick.value !== cfg.from) { pick.append(el("option", { value: cfg.from, textContent: cfg.from + "  (not found)" })); pick.value = cfg.from; }
       holder.append(el("span", { className: "dim", textContent: `${d.total} episodes in ${show}. Everything before the one chosen is the loop; from it on is new.` }));
     }).catch((e) => say(e.message, "err"));
+    // the nights and what each airs, from the draft as it is now
+    const preview = el("div", { className: "premiere-preview" });
+    holder.append(preview);
+    call("/api/stations/premiere-preview", { schedule: state.schedule }).then((r) => {
+      const p = (r.shows || {})[show];
+      if (!p) return;
+      preview.replaceChildren();
+      if (!p.start_set) {
+        preview.append(el("span", { className: "dim", textContent: "Choose where the new episodes start to see which one airs on each night." }));
+        return;
+      }
+      const day = (iso) => new Date(iso + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+      for (const n of p.nights) {
+        preview.append(el("div", { className: "night " + n.kind, textContent:
+          n.kind === "new" ? `${day(n.date)} → ${n.title || n.episode}` : `${day(n.date)} → no new episode left: the loop plays` }));
+      }
+      const left = p.new_left === 0 ? "No new episodes are left, so the premiere night plays the loop."
+        : `${p.new_left} new episode${p.new_left === 1 ? "" : "s"} left` + (p.last ? `; the last one airs ${day(p.last)}, then the loop.` : ".");
+      preview.append(el("span", { className: "dim", textContent: left }));
+    }).catch(() => {});
     pick.addEventListener("change", () => {
       prem()[show] = { from: pick.value, since: iso(new Date()) };       // starting over: the first premiere is the next night
       renderProblem();

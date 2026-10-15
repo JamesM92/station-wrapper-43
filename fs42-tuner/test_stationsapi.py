@@ -275,6 +275,28 @@ class SeasonsApiTest(Base):
         self.assertEqual(self.api.sync_schedules(later), [])                     # nothing new: no config change, no catalog update
         self.assertNotIn(("update", "Cartoons"), self.console.log)
 
+    def test_the_premiere_preview_lists_the_nights_and_what_is_left(self):
+        from datetime import date
+        show = os.path.join(self.lists, "Series")
+        for season, n in (("Season 1", 2), ("Season 2", 3)):
+            os.makedirs(os.path.join(show, season))
+            for i in range(1, n + 1):
+                open(os.path.join(show, season, f"S0{season[-1]}E0{i}.mp4"), "w").close()
+        week = {n: self.day((0, 24, ["Cartoons"])) for n in self.sc.DAYS}
+        for n in self.sc.DAYS[:5]:
+            week[n] = self.day((0, 19, ["Cartoons"]), (19, 20, ["Series"]), (20, 24, ["Cartoons"]))
+        week["friday"]["videos"][1]["premiere"] = True
+        defn = {"default": week, "seasons": {"dates": dict(self.sc.DEFAULT_DATES), **{s: None for s in self.sc.SEASONS}},
+                "events": [], "premieres": {"Series": {"from": "Season 2", "since": "2026-10-14"}}}
+        got = self.api.premiere_preview(defn, count=5, today=date(2026, 10, 14))["Series"]
+        self.assertEqual([(n["date"], n["kind"]) for n in got["nights"]],
+                         [("2026-10-16", "new"), ("2026-10-23", "new"), ("2026-10-30", "new"), ("2026-11-06", "loop"), ("2026-11-13", "loop")])
+        self.assertEqual(got["nights"][0]["episode"], "Season 2/S02E01.mp4")
+        self.assertEqual((got["new_total"], got["new_left"], got["last"]), (3, 3, "2026-10-30"))
+        self.assertTrue(got["start_set"])
+        defn["premieres"]["Series"]["from"] = ""
+        self.assertFalse(self.api.premiere_preview(defn, today=date(2026, 10, 14))["Series"]["start_set"])
+
     def test_rename_and_delete_take_the_definition_along(self):
         self.api.save(None, self.form())
         self.console.confs["Cartoons"]["_has_schedule"] = False

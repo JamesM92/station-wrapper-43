@@ -30,6 +30,9 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
   duplicate warnings (beside the list they are in) and the **Rescan** button are on the Lists & files page, above the lists.
 
 ### Added
+- **A preview of the premiere nights.** In the slot editor, under *The new episodes start at*, the next six premiere nights are listed with
+  the episode each airs (its title when the library has one, else its file) and a line saying how many new episodes are left and when the
+  last one airs, worked out from the schedule as it is being edited, by the same date logic that builds the config.
 - **A record of the joins between pieces.** The dashboard has a *Joins* card and a *Recent joins* table: for each cut between pieces,
   how late its picture came against when the schedule had it due, whether it was warm-started or read ahead, and (as a median,
   90th percentile and worst over the last hour) how the warm ones compare with the plain ones. A tune-in is counted apart, by its time to

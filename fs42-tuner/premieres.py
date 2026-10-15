@@ -85,7 +85,7 @@ def plan(defn, lists_dir, today):
             if k < len(new):
                 need[new_tag(show, k)] = new[k]
         out[show] = {"loop": loop_tag(show) if pool else None, "new": [new_tag(show, k) for k in range(len(new))],
-                     "pool": pool, "need": need, "dir": show_dir}
+                     "new_paths": new, "pool": pool, "need": need, "dir": show_dir}
     return out
 
 
