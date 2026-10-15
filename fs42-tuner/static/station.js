@@ -831,9 +831,14 @@
   }
   document.querySelectorAll("input[name=kind]").forEach((r) => r.addEventListener("change", showKind));
   // how the drawing of this channel's own mid cards is going (it happens in the background after a save)
-  function showCardsNote(c) {
+  let cardsTimer = null;
+  function showCardsNote(c, name) {
     $("f-gen-note").textContent = c && c.message ? c.message : "";
     $("f-gen-note").className = "hint" + (c && c.state === "error" ? " bad" : "");
+    clearTimeout(cardsTimer);
+    if (c && c.state === "drawing" && name) {            // it is drawn in the background: look again until it is done
+      cardsTimer = setTimeout(() => call(`/api/stations/get?name=${encodeURIComponent(name)}`).then((g) => showCardsNote(g.cards, name)).catch(() => {}), 3000);
+    }
   }
 
   function breaksChanged() {
@@ -935,6 +940,7 @@
     }
     const out = await call("/api/stations/save", { original, form });
     state.dirty = false;
+    if (form.gen_cards) showCardsNote({ state: "drawing", message: "drawing this channel's mid cards…" }, out.name);   // then it checks back until done
     if (kind() === "guide") await call("/api/titles/settings", { episode_names: $("g-episodes").checked });      // the episode names setting lives on this page
     return out;
   }
@@ -999,7 +1005,7 @@
     if (original) {
       $("title").textContent = original;
       const got = await call(`/api/stations/get?name=${encodeURIComponent(original)}`);
-      showCardsNote(got.cards);
+      showCardsNote(got.cards, original);
       $("f-name").disabled = true;
       $("name-hint").textContent = "To rename a station, use Rename on the Stations page: it also rebuilds the schedule under the new name.";
       if (!got.form) {

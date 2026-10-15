@@ -214,6 +214,8 @@ echo "Host directories ready:"
 echo "  $CONFIG_ROOT           (config: runtime/ confs/ tuner/)"
 echo "  $CATALOG_DIR           (catalog: by-genre/ tanfo/ media-links/)"
 echo "  $FS42_MEDIA_ROOT (existing; your media, may be one or several shares)"
+echo "The services will run as $(stat -c %u:%g "$CONFIG_ROOT") (the owner of $CONFIG_ROOT), not root. To use another account"
+echo "set PUID and PGID in .env; it must be able to read $FS42_MEDIA_ROOT."
 if [ "${RENAME_NEEDED:-0}" = 1 ]; then
   echo "! Remember to rename FS42_SSD_ROOT to FS42_LOCAL_ROOT in .env: docker compose needs the new name." >&2
   exit 1

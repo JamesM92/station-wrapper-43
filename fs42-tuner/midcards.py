@@ -28,7 +28,7 @@ except ImportError:                     # drawing says so when asked; the rest o
 
 GEN_DIR = ".generated-cards"
 MANIFEST = "manifest.json"
-VERSION = 4                             # bump when the design changes: the cards are drawn again
+VERSION = 5                             # bump when the design changes: the cards are drawn again
 SIZE = (1280, 720)
 FPS = 30
 SECONDS = 2                             # short: a break's own time is for the commercials
@@ -50,6 +50,11 @@ def styles():
 def _theme(style):
     import guide_channel
     return guide_channel.THEMES.get(style) or guide_channel.THEMES[DEFAULT_STYLE]
+
+
+# which of the theme's colours the letters' sides take (the theme's own `cell_edge` unless it says otherwise): Midnight is dark
+# with an orange line, so its letters are edged in the orange rather than the grey of its guide cells
+SIDE_COLOUR = {"midnight": "cell_now_edge"}
 
 
 def clean_style(style):
@@ -216,7 +221,7 @@ def _background(theme):
     return col.resize(SIZE)
 
 
-def _text_frames(name, theme):
+def _text_frames(name, theme, style=DEFAULT_STYLE):
     """Yield the picture of the turned text for each frame (a full-frame RGBA and where the text is). The two lines are one
     plane, so they turn as one rigid body: a swing back and forth over the clip, easing at each end so it loops without a
     jump, with a small nod a quarter of a swing behind it. Its thickness is a stack of copies of the letters' own shape."""
@@ -224,7 +229,7 @@ def _text_frames(name, theme):
     pad = 8
     w, h = plane.size
     face = _face(plane, theme)
-    side_rgb = tuple(theme["cell_edge"][:3])
+    side_rgb = tuple(theme[SIDE_COLOUR.get(style, "cell_edge")][:3])
     cx, cy = SIZE[0] / 2, SIZE[1] * 0.40
     total = FPS * SECONDS
     layers = []
@@ -302,7 +307,7 @@ def draw(lists_dir, name, style=DEFAULT_STYLE, log=print):
             base = bg.copy()
             base.alpha_composite(_caption(text))
             jobs.append({"final": final, "tmp": tmp, "base": base, "proc": _encoder(tmp)})
-        for layer, at in _text_frames(str(name), theme):
+        for layer, at in _text_frames(str(name), theme, style):
             for j in jobs:
                 frame = j["base"].copy()
                 # the caption is under the text where they meet (they do not, but keep the order the picture is read in)

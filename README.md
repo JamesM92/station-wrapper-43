@@ -25,10 +25,15 @@ Make your own TV channels out of your own videos. **Station Wrapper 43** runs [F
 
 ```
 cp .env.example .env        # set FS42_LOCAL_ROOT (local disk) and FS42_MEDIA_ROOT (your videos)
-./setup-dirs.sh             # creates the local layout, once
+./setup-dirs.sh             # creates the local layout, once (run it as the account that should own the files)
 docker login ghcr.io          # only if the package is private
 docker compose pull && docker compose up -d
 ```
+
+The services run as **`PUID`:`PGID`**, not root. Unset, they are whoever owns the config folder (the account that ran `setup-dirs.sh`), so
+usually there is nothing to do; set `PUID` and `PGID` in `.env` (`id -u`, `id -g`) to use another account. That account must be able to
+read your media. The scripts you run on the host (`init.py`, `build_channels.py`) should run as the same account. Upgrading from a version
+that ran as root gives what it left in the config and catalog folders to that account, once, on the first start.
 
 Prefer to write the compose file yourself, with only some media folders mounted? [docker-compose.sample.yml](docker-compose.sample.yml) is a complete one.
 

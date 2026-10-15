@@ -7,4 +7,7 @@
 5. **Add an antenna tuner, a playlist or a camera** on the **Sources** page. They go through this container too, so the client only ever talks to it.
 6. **Something wrong?** Open **Status**, press **Download diagnostics**, and send the file.
 
+The services run as `PUID`:`PGID` (unset: whoever owns the config folder, so run `setup-dirs.sh` as the account that should own your
+files; set both in `.env` to use another one, and make sure it can read your media).
+
 Back up the config folder; upgrading is `docker compose pull && docker compose up -d`. More detail is in the [reference](docs/REFERENCE.md).
