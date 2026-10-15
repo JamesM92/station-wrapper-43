@@ -1,6 +1,6 @@
 """Generated mid cards: "We'll be right back" and "We're back with more", drawn for one channel.
 
-Each card is 5 seconds, 1280x720, 30 fps, silent, like the splash card: "Station Wrapper 43" and the channel's name as 3D
+Each card is 2 seconds, 1280x720, 30 fps, silent, like the splash card: "Station Wrapper 43" and the channel's name as 3D
 text that turns a little back and forth, and the caption flat along the bottom. They are an extra choice in a station's
 break (the station's own lists stay as they are and are never changed):
 
@@ -28,10 +28,10 @@ except ImportError:                     # drawing says so when asked; the rest o
 
 GEN_DIR = ".generated-cards"
 MANIFEST = "manifest.json"
-VERSION = 2                             # bump when the design changes: the cards are drawn again
+VERSION = 3                             # bump when the design changes: the cards are drawn again
 SIZE = (1280, 720)
 FPS = 30
-SECONDS = 5
+SECONDS = 2                             # short: a break's own time is for the commercials
 SWING = 40.0                            # degrees either side, about the vertical axis
 NOD = 9.0                               # and a small nod about the horizontal axis, a quarter of a turn behind the swing
 DEPTH = 56                              # pixels of thickness at the front

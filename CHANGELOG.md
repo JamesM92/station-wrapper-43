@@ -31,7 +31,7 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
 
 ### Added
 - **Mid cards drawn for a channel.** On the station form, with *Default mid cards* on, *Also draw cards for this channel* adds two
-  cards made from the channel's name (5 seconds, 1280x720: *Station Wrapper 43* and the name in 3D letters, one rigid piece, that swing about 40 degrees back
+  cards made from the channel's name (2 seconds, 1280x720: *Station Wrapper 43* and the name in 3D letters, one rigid piece, that swing about 40 degrees back
   and forth with a slight nod, with *We'll be right back* or *We're back with more* flat along the bottom) to the start and end lists. Each break picks
   from your lists and these like any other card, and your lists are never changed (a list shared by several channels stays as it is):
   the clips sit together in one hidden folder, and each channel's own hidden break folder links to its two clips and to your chosen
