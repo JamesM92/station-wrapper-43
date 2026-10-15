@@ -720,6 +720,13 @@ class Channel:
             self._shutdown(why="nobody watching: the queued break has run")
             return
 
+        waiting = self._warm
+        if cur.remaining < 1.5 and waiting is not None and (waiting["path"], waiting["skip"]) != (path, entry.skip):
+            # What is left of this piece is a moment, and the piece after it is already started and waiting (a piece started
+            # early finishes a little before its time). Starting this one again would cost more than the moment is worth and
+            # would throw the waiting piece away: wait the moment out and go straight on to it.
+            self.stop.wait(max(cur.remaining, 0.0))
+            return
         self.now_playing = cur.block_title
         warm = self._take_warm(path, cur)                       # this very piece, started a few seconds early, or None
         if warm is not None:
@@ -829,9 +836,9 @@ class Channel:
         timer.start()
 
     def _prepare_next(self, boundary, clock_next):
-        """Start the next piece's ffmpeg now, so its file is open and seeked by the time `boundary` (when this piece ends)
-        comes. Nothing is read from it until then. Skipped (and so played the ordinary way) for a piece that starts at the
-        beginning of its file or is not a plain file."""
+        """Start the next piece's ffmpeg a little before `boundary` (when this piece ends) so that its first picture comes out
+        when it is due. Nothing is read from it until then. Skipped (and so played the ordinary way) for a piece that is not a
+        plain file."""
         try:
             if self.stop.is_set() or self.reload.is_set():
                 return
@@ -839,16 +846,24 @@ class Channel:
             when = datetime.now() + timedelta(seconds=wait + 0.05)
             nxt = resolver.resolve(DB_PATH, self.station, when)
             e = nxt.entry
-            if e.is_stream or nxt.offset > 1.0 or e.skip < 1.0:
-                return                          # not a piece that joins part way in: opening it is quick anyway
+            if e.is_stream or nxt.offset > 1.0:
+                return
             path = media_path(e.path)
             if os.path.splitext(path)[1].lower() in IMAGE_EXT or not os.path.exists(path):
                 return
-            lead = min(WARM_LEAD, e.skip, max(wait - WARM_STARTUP, 0.0))
+            if e.content_type in ("commercial", "bump") and self.tail is not None:
+                return                          # a channel winding down: the tail rules decide on a break when it is due
+            # A piece that joins part way into its file is started `lead` seconds early, reading from `lead` earlier (the open
+            # and the seek happen in that time). One that starts at the beginning of its file has nothing earlier to read, so it is
+            # started just early enough that its first picture comes out when it is due (WARM_STARTUP before).
+            lead = min(WARM_LEAD, e.skip, max(wait - WARM_STARTUP, 0.0)) if e.skip >= 1.0 else 0.0
             if lead < 0.5:
+                lead = 0.0
+            pause = boundary - WARM_STARTUP - lead - time.time()
+            if pause > 0 and self.stop.wait(pause):
                 return
-            if e.content_type in ("commercial", "bump"):
-                return                          # breaks begin at the start of their files; the tail rules decide on them when due
+            if self.stop.is_set() or self.reload.is_set():
+                return
             local, pinned = PREFETCH.pin(path)
             offair = offair_reason(self.station, e, nxt.block_title)
             began = time.time()

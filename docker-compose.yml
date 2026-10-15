@@ -110,8 +110,7 @@ services:
       # Shows and commercials are brought to one volume (a fixed gain per video, measured once in the background). 0 switches it off.
       LOUDNESS: ${LOUDNESS:-}
       # A show that resumes after a break is opened and seeked this many seconds BEFORE it is due (while the break is still
-      # playing), so the join is not a pause. Blank is 4; 0 switches it off. Pieces that start at the beginning of a file are
-      # unaffected.
+      # playing), so the join is not a pause; a commercial or card is started 0.8 s early. Blank is 4; 0 switches both off.
       WARM_START_SECONDS: ${WARM_START_SECONDS:-}
       FARM_INTERVAL_MINUTES: ${FARM_INTERVAL_MINUTES:-30}
       SYNC_INTERVAL_MINUTES: ${SYNC_INTERVAL_MINUTES:-60}

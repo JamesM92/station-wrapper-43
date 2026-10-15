@@ -95,6 +95,13 @@ class Handover(unittest.TestCase):
         self.assertIsNone(ch._take_warm("/m/a.mkv", self.cursor("/m/a.mkv", 1500.0)))
         proc.wait(timeout=5)
 
+    def test_a_piece_from_the_start_of_its_file_is_started_just_early_enough(self):
+        """A plain command has no lead: its first picture comes about WARM_STARTUP after it is started, so starting it that much
+        early puts the first picture at the join."""
+        cmd = tuner.segment_cmd("/m/ad.mp4", 0.0, 30.0, False, lead=0.0)
+        self.assertEqual(cmd.count("-ss"), 1)
+        self.assertEqual(cmd[cmd.index("-ss") + 1], "0.000")
+
     def test_dropping_with_nothing_started_is_harmless(self):
         self.channel()._drop_warm()
 

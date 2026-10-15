@@ -30,11 +30,11 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
   duplicate warnings (beside the list they are in) and the **Rescan** button are on the Lists & files page, above the lists.
 
 ### Added
-- **Warm start for a show that resumes after a break.** The part of a show that follows a break is now started 4 seconds
-  before it is due (`WARM_START_SECONDS`, 0 switches it off): its file is opened and seeked while the commercials or cards are
-  still playing, and the picture joins on time instead of after the open and seek. It is for pieces that join part way into
-  their file (a movie or episode resuming); a piece that starts at the beginning of its file still starts when it is due, as
-  its open is quick, and the read-ahead copies are used for either.
+- **Warm start.** Each piece of a channel is now started before it is due, so its picture comes out when it should instead of
+  after the file has been opened and the encoder has started. A part of a show that resumes after a break is started 4 seconds
+  early (`WARM_START_SECONDS`, 0 switches it off) so that the open and the seek happen while the commercials or cards are still
+  playing; a piece that starts at the beginning of its file (a commercial, a card) is started 0.8 seconds early, the time an
+  ffmpeg takes to put out its first picture. The log marks them *[warm start]*.
 - **Mid cards drawn for a channel.** On the station form, with *Default mid cards* on, *Also draw cards for this channel* adds two
   cards made from the channel's name (2 seconds, 1280x720: *Station Wrapper 43* and the name in 3D letters, one rigid piece, that swing about 40 degrees back
   and forth with a slight nod, with *We'll be right back* or *We're back with more* flat along the bottom) to the start and end lists. Each break picks
