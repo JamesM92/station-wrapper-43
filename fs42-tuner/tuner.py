@@ -267,15 +267,21 @@ def _continuous(mux):
     return [("+resend_headers" if m == "+resend_headers+initial_discontinuity" else m) for m in mux]
 
 
-def segment_cmd(path, seek, duration, is_stream, ts_offset=None, text=None, subs=None, ordered=False, audio=None):
+def segment_cmd(path, seek, duration, is_stream, ts_offset=None, text=None, subs=None, ordered=False, audio=None, lead=0.0):
     """ffmpeg for one plan entry. -ss before -i so the seek is fast, -t bounds
     it to the scheduled duration so a file that runs long can't push the
     channel off its own clock. -re paces output at realtime: without it ffmpeg
     would encode a 20-minute segment as fast as the CPU allows and the fanout
-    would race ahead of the wall clock it is supposed to track."""
+    would race ahead of the wall clock it is supposed to track.
+
+    `lead` (a warm start, see WARM_LEAD): it is started that many seconds before it is due, reading from `lead` seconds
+    earlier in the file, and the first `lead` seconds of what comes out are dropped before they are encoded. The file is
+    opened and seeked during that time, and the picture the viewer gets starts at `seek`, on time."""
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-re"]
     if is_stream:
         cmd += ["-i", path]
+    elif lead > 0:
+        cmd += ["-ss", f"{max(seek - lead, 0):.3f}", "-i", path, "-ss", f"{lead:.3f}", "-t", f"{duration:.3f}"]
     else:
         cmd += ["-ss", f"{seek:.3f}", "-i", path, "-t", f"{duration:.3f}"]
     enc = with_subtitles(NORMALIZE, subs)
@@ -476,6 +482,13 @@ class Channel:
     """One encoder feeding N viewers. Started on the first viewer, stopped
     (after a linger) when the last one leaves."""
 
+    _warm = None                              # the next piece, already started and held (see _prepare_next)
+    _warm_timer = None
+
+    @property
+    def _warm_lock(self):
+        return self.__dict__.setdefault("_warm_lock_obj", threading.Lock())
+
     def __init__(self, number, station, pool):
         self.number, self.station, self.pool = number, station, pool
         self.subs = set()
@@ -663,6 +676,7 @@ class Channel:
                     self._pipe(filler_cmd(10, ("CHANNEL ERROR: " + type(e).__name__ + ": " + str(e))[:70]))
                 except Exception:
                     self.stop.wait(5)
+        self._drop_warm()
         with self.lock:
             for sub in list(self.subs):
                 sub.put(None)
@@ -707,17 +721,27 @@ class Channel:
             return
 
         self.now_playing = cur.block_title
-        local, pinned = (path, False) if entry.is_stream else PREFETCH.pin(path)     # a copy made ahead of time, if there is one
+        warm = self._take_warm(path, cur)                       # this very piece, started a few seconds early, or None
+        if warm is not None:
+            local, pinned = warm["local"], warm["pinned"]
+        else:
+            local, pinned = (path, False) if entry.is_stream else PREFETCH.pin(path)     # a copy made ahead of time, if there is one
         print(f"[ch{self.number}] {cur.block_title} :: {os.path.basename(entry.path)} "
-              f"@{cur.seek:.0f}s for {cur.remaining:.0f}s ({entry.content_type})" + (" [from the read-ahead copy]" if pinned else ""))
+              f"@{cur.seek:.0f}s for {cur.remaining:.0f}s ({entry.content_type})" + (" [from the read-ahead copy]" if pinned else "")
+              + (" [warm start]" if warm is not None else ""))
         try:
             subs = caption_filter(self.station, entry, path, local, cur.seek)
             inject = caption_injector(self.station, entry, path, cur.seek)
-            sent = self._pipe(segment_cmd(local, cur.seek, cur.remaining, entry.is_stream, self.clock if CONTINUOUS_TS else None,
-                                          text=offair, subs=subs,
-                                          ordered=inject is not None,
-                                          audio=audio_level_filter(self.station, entry, path)),
-                              label=name, cached=pinned, inject=inject)
+            began = time.time()
+            self._arm_warm(entry, cur, began)                    # and the one after it, a few seconds before this one ends
+            if warm is not None:
+                sent = self._pipe(None, label=name, cached=pinned, inject=inject, proc=warm["proc"])
+            else:
+                sent = self._pipe(segment_cmd(local, cur.seek, cur.remaining, entry.is_stream, self.clock if CONTINUOUS_TS else None,
+                                              text=offair, subs=subs,
+                                              ordered=inject is not None,
+                                              audio=audio_level_filter(self.station, entry, path)),
+                                  label=name, cached=pinned, inject=inject)
             self.clock += cur.remaining
             if sent < 1024 and not entry.is_stream and not self.stop.is_set() and not self.reload.is_set():
                 # ffmpeg gave nothing for a file that is there: it can't be read. Say so, and don't spin on it.
@@ -787,11 +811,105 @@ class Channel:
                 except OSError:
                     pass
 
-    def _pipe(self, cmd, label=None, cached=False, inject=None):
-        """Run one ffmpeg into the channel. Returns how many bytes came out of it."""
-        began = time.time()
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                stderr=subprocess.DEVNULL, bufsize=0)
+    # ---- warm start: the piece after this one is opened and seeked while this one is still playing
+    def _arm_warm(self, entry, cur, began):
+        """Set a timer to start the next piece early, if this is a kind of piece that is followed by one worth starting early."""
+        if WARM_LEAD <= 0 or entry.is_stream or self.stop.is_set():
+            return
+        boundary = began + cur.remaining
+        delay = boundary - WARM_STARTUP - WARM_LEAD - time.time()
+        if cur.remaining < 1:
+            return
+        timer = threading.Timer(max(delay, 0.0), self._prepare_next, args=(boundary, self.clock + cur.remaining))
+        timer.daemon = True
+        with self._warm_lock:
+            if self._warm_timer is not None:
+                self._warm_timer.cancel()
+            self._warm_timer = timer
+        timer.start()
+
+    def _prepare_next(self, boundary, clock_next):
+        """Start the next piece's ffmpeg now, so its file is open and seeked by the time `boundary` (when this piece ends)
+        comes. Nothing is read from it until then. Skipped (and so played the ordinary way) for a piece that starts at the
+        beginning of its file or is not a plain file."""
+        try:
+            if self.stop.is_set() or self.reload.is_set():
+                return
+            wait = max(boundary - time.time(), 0.0)
+            when = datetime.now() + timedelta(seconds=wait + 0.05)
+            nxt = resolver.resolve(DB_PATH, self.station, when)
+            e = nxt.entry
+            if e.is_stream or nxt.offset > 1.0 or e.skip < 1.0:
+                return                          # not a piece that joins part way in: opening it is quick anyway
+            path = media_path(e.path)
+            if os.path.splitext(path)[1].lower() in IMAGE_EXT or not os.path.exists(path):
+                return
+            lead = min(WARM_LEAD, e.skip, max(wait - WARM_STARTUP, 0.0))
+            if lead < 0.5:
+                return
+            if e.content_type in ("commercial", "bump"):
+                return                          # breaks begin at the start of their files; the tail rules decide on them when due
+            local, pinned = PREFETCH.pin(path)
+            offair = offair_reason(self.station, e, nxt.block_title)
+            began = time.time()
+            subs = caption_filter(self.station, e, path, local, e.skip)
+            inject_ok = caption_injector(self.station, e, path, e.skip) is not None
+            cmd = segment_cmd(local, e.skip, nxt.remaining + nxt.offset, False, clock_next if CONTINUOUS_TS else None, text=offair,
+                              subs=subs, ordered=inject_ok, audio=audio_level_filter(self.station, e, path), lead=lead)
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
+            with self._warm_lock:
+                old, self._warm = self._warm, {"proc": proc, "path": path, "skip": e.skip, "local": local, "pinned": pinned,
+                                               "began": began, "lead": lead}
+            if old:
+                self._release(old)
+        except resolver.ScheduleGap:
+            pass                                 # nothing follows (the end of what is built): the ordinary way will say so
+        except Exception as ex:                  # a warm start is only an optimisation: never a reason to lose the channel
+            print(f"[ch{self.number}] warm start skipped: {ex!r}", flush=True)
+
+    def _take_warm(self, path, cur):
+        """The piece started early, if it is the one now due (the same file, joining where it was told to); else it is
+        dropped and None is returned."""
+        with self._warm_lock:
+            warm, self._warm = self._warm, None
+        if warm is None:
+            return None
+        ok = (warm["path"] == path and abs(cur.entry.skip - warm["skip"]) < 0.5 and cur.offset < 4.0 + warm["lead"]
+              and warm["proc"].poll() is None)
+        if not ok:
+            self._release(warm)
+            return None
+        return warm
+
+    def _release(self, warm):
+        try:
+            if warm["proc"].poll() is None:
+                warm["proc"].terminate()
+                try:
+                    warm["proc"].wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    warm["proc"].kill()
+        except Exception:
+            pass
+        if warm.get("pinned"):
+            PREFETCH.unpin(warm["path"])
+
+    def _drop_warm(self):
+        with self._warm_lock:
+            if self._warm_timer is not None:
+                self._warm_timer.cancel()
+                self._warm_timer = None
+            warm, self._warm = self._warm, None
+        if warm:
+            self._release(warm)
+
+    def _pipe(self, cmd, label=None, cached=False, inject=None, proc=None, began=None):
+        """Run one ffmpeg into the channel (or carry on with `proc`, one started a little early). Returns how many bytes came
+        out of it."""
+        began = began or time.time()
+        if proc is None:
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                    stderr=subprocess.DEVNULL, bufsize=0)
         first = True
         sent = 0
         try:
@@ -921,6 +1039,20 @@ SOURCES = iptv.Sources(os.environ.get("FS42_IPTV") or os.path.join(os.path.dirna
 SOURCES_LOCK = threading.Lock()
 EXTERNAL_CLASHES = []               # channels whose number was taken, from the last sync
 SLOW_START_SECONDS = float(os.environ.get("SLOW_START_SECONDS", "2"))
+# Warm start: the piece that follows is started this many seconds BEFORE it is due (reading from this far ahead of where it
+# joins), so its file is already open, seeked and decoding when the one before it ends. Only for a piece that joins part way
+# into its file (a show resuming after a break), where the open and seek are the slow part. 0 switches it off.
+def _seconds(name, default):
+    """A number of seconds from the environment; blank (a compose file passes one) is the default, 0 is zero."""
+    try:
+        text = os.environ.get(name, "").strip()
+        return max(float(text), 0.0) if text else default
+    except ValueError:
+        return default
+
+
+WARM_LEAD = _seconds("WARM_START_SECONDS", 4.0)
+WARM_STARTUP = _seconds("WARM_START_STARTUP_SECONDS", 0.8)     # what an ffmpeg takes to put out a first picture
 GUIDE_FPS = max(5, min(30, int(os.environ.get("GUIDE_FPS", "15"))))     # frames per second the guide channel is drawn at
 # Read ahead for the channels being watched (prefetch.py): the next break or episode is copied into RAM before it is due
 _PREFETCH_CFG = prefetch.env_config()
