@@ -28,13 +28,14 @@ except ImportError:                     # drawing says so when asked; the rest o
 
 GEN_DIR = ".generated-cards"
 MANIFEST = "manifest.json"
-VERSION = 1                             # bump when the design changes: the cards are drawn again
+VERSION = 2                             # bump when the design changes: the cards are drawn again
 SIZE = (1280, 720)
 FPS = 30
 SECONDS = 5
-SWING = 25.0                            # degrees either side
-DEPTH = 38                              # pixels of thickness at the front
-SLICES = 10
+SWING = 40.0                            # degrees either side, about the vertical axis
+NOD = 9.0                               # and a small nod about the horizontal axis, a quarter of a turn behind the swing
+DEPTH = 56                              # pixels of thickness at the front
+SLICES = 14
 BRAND = "Station Wrapper 43"
 CAPTIONS = {"start": "We'll be right back", "end": "We're back with more"}
 FONT_BOLD = ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "DejaVuSans-Bold.ttf"]
@@ -158,15 +159,19 @@ def _coeffs(dst, w, h):
     return _solve(a, b)
 
 
-def _corners(w, h, theta, z, cx, cy, focal=1600.0):
-    """Where the corners of a w x h plane land on screen when it is turned `theta` radians about the vertical axis through
-    its middle, with its depth position `z` (negative is behind the face), seen with a perspective."""
+def _corners(w, h, theta, phi, z, cx, cy, focal=1500.0):
+    """Where the corners of a w x h plane land on screen when the whole body is turned `theta` radians about the vertical
+    axis and nodded `phi` about the horizontal one through its middle, with its depth position `z` (negative is behind the
+    face), seen with a perspective. Every corner goes through the same turn: the text is one rigid piece."""
     out = []
+    ct, st, cp, sp = math.cos(theta), math.sin(theta), math.cos(phi), math.sin(phi)
     for x, y in ((-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h / 2), (-w / 2, h / 2)):
-        X = x * math.cos(theta) + z * math.sin(theta)
-        Z = -x * math.sin(theta) + z * math.cos(theta)
+        X = x * ct + z * st                          # turn about the vertical axis
+        Z = -x * st + z * ct
+        Y = y * cp - Z * sp                          # then nod about the horizontal one
+        Z = y * sp + Z * cp
         s = focal / (focal + Z)
-        out.append((cx + X * s, cy + y * s))
+        out.append((cx + X * s, cy + Y * s))
     return out
 
 
@@ -196,38 +201,41 @@ def _background():
 
 
 def _text_frames(name):
-    """Yield the picture of the turned text for each frame (a full-frame RGBA and where the text is): one swing back and
-    forth over the clip, easing at each end so the clip loops without a jump."""
+    """Yield the picture of the turned text for each frame (a full-frame RGBA and where the text is). The two lines are one
+    plane, so they turn as one rigid body: a swing back and forth over the clip, easing at each end so it loops without a
+    jump, with a small nod a quarter of a swing behind it. Its thickness is a stack of copies of the letters' own shape."""
     plane = _plane(name)
     pad = 8
     w, h = plane.size
     face = _face(plane)
-    side = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    side.paste(plane.filter(ImageFilter.MaxFilter(7)), (0, 0))
     cx, cy = SIZE[0] / 2, SIZE[1] * 0.40
     total = FPS * SECONDS
     layers = []
     for s in range(SLICES, 0, -1):
-        shade = int(40 + 70 * (1 - s / SLICES))                       # darker toward the back
-        layers.append((-DEPTH * s / SLICES, _tint(side, (shade // 3, shade, 110 + shade))))
+        depth = s / SLICES
+        lit = 1 - 0.65 * depth                                         # lighter at the front edge, darker toward the back
+        layers.append((-DEPTH * depth, _tint(plane, (int(40 * lit), int(110 * lit), int(235 * lit)))))
     for i in range(total):
-        theta = math.radians(SWING) * math.sin(2 * math.pi * i / total)
-        quads = [(z, _corners(w + 2 * pad, h + 2 * pad, theta, z, cx, cy), img) for z, img in layers]
-        front = _corners(w + 2 * pad, h + 2 * pad, theta, 0, cx, cy)
-        xs = [x for _, q, _ in quads for x, _y in q] + [x for x, _y in front]
-        ys = [y for _, q, _ in quads for _x, y in q] + [y for _x, y in front]
+        phase = 2 * math.pi * i / total
+        theta = math.radians(SWING) * math.sin(phase)
+        phi = math.radians(NOD) * math.sin(phase + math.pi / 2)
+        dims = (w + 2 * pad, h + 2 * pad)
+        quads = [(_corners(*dims, theta, phi, z, cx, cy), img) for z, img in layers]
+        front = _corners(*dims, theta, phi, 0, cx, cy)
+        xs = [x for q, _ in quads for x, _y in q] + [x for x, _y in front]
+        ys = [y for q, _ in quads for _x, y in q] + [y for _x, y in front]
         x0, y0 = max(int(min(xs)) - 2, 0), max(int(min(ys)) - 2, 0)
         x1, y1 = min(int(max(xs)) + 3, SIZE[0]), min(int(max(ys)) + 3, SIZE[1])
         box = (x1 - x0, y1 - y0)
         canvas = Image.new("RGBA", box, (0, 0, 0, 0))
 
         def put(img, corners, resample):
-            padded = Image.new("RGBA", (w + 2 * pad, h + 2 * pad), (0, 0, 0, 0))
+            padded = Image.new("RGBA", dims, (0, 0, 0, 0))
             padded.paste(img, (pad, pad))
             shifted = [(x - x0, y - y0) for x, y in corners]
-            canvas.alpha_composite(padded.transform(box, Image.PERSPECTIVE, _coeffs(shifted, w + 2 * pad, h + 2 * pad), resample))
-        for z, q, img in quads:
-            put(img, q, Image.NEAREST)
+            canvas.alpha_composite(padded.transform(box, Image.PERSPECTIVE, _coeffs(shifted, *dims), resample))
+        for q, img in quads:
+            put(img, q, Image.BILINEAR)
         put(face, front, Image.BILINEAR)
         yield canvas, (x0, y0)
 
