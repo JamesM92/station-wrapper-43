@@ -282,7 +282,7 @@ class Stations:
         with self._cards_lock:
             return dict(self._cards.get(name) or {})
 
-    def _start_cards(self, name, start, end, force=False):
+    def _start_cards(self, name, start, end, style=None, force=False):
         """Draw a channel's own mid cards (if they are not already drawn for this name), link them into its break folder and
         bring them into its catalog. In the background: a card takes a few seconds, and a failure is only remembered
         (shown on the station's page), never raised: the channel plays its lists as before."""
@@ -301,8 +301,8 @@ class Stations:
 
         def work():
             try:
-                if force or not midcards.current(self.lists_dir, name):
-                    midcards.draw(self.lists_dir, name)
+                if force or not midcards.current(self.lists_dir, name, style):
+                    midcards.draw(self.lists_dir, name, style or midcards.DEFAULT_STYLE)
                 midcards.link(self.lists_dir, name, start, end)
                 note = ""
                 if resolver.coverage(self.db_path, name) is not None:          # it has a catalog to add them to
@@ -324,8 +324,9 @@ class Stations:
         if not self.lists_dir:
             return
         for name, conf in self.console.stations().items():
-            if conf.get("wrapper_gen_cards") is True and conf.get("wrapper_mid_cards") is not False and not midcards.current(self.lists_dir, name):
-                self._start_cards(name, conf.get("wrapper_start_cards") or "bump", conf.get("wrapper_end_cards") or conf.get("wrapper_start_cards") or "bump")
+            style = conf.get("wrapper_gen_style")
+            if conf.get("wrapper_gen_cards") is True and conf.get("wrapper_mid_cards") is not False and not midcards.current(self.lists_dir, name, style):
+                self._start_cards(name, conf.get("wrapper_start_cards") or "bump", conf.get("wrapper_end_cards") or conf.get("wrapper_start_cards") or "bump", style)
 
     # ---- reading
     def _coverage(self, name, now):
@@ -555,7 +556,7 @@ class Stations:
             except OSError as e:
                 warnings.append(f"the start and end of break cards could not be set up: {e}")
         if form["kind"] == "standard" and form.get("gen_cards") and self.lists_dir:
-            self._start_cards(form["name"], form["bump"], form.get("bump_end", form["bump"]))
+            self._start_cards(form["name"], form["bump"], form.get("bump_end", form["bump"]), form.get("gen_style"))
         if "schedule" in form and form["kind"] == "standard":
             schedules.put(form["name"], form["schedule"], skipped=self._empty_lists(names=sf.lists_used(form), fresh=True))   # the editor's own copy: seasons, special days, commercials
         else:
@@ -595,7 +596,8 @@ class Stations:
         schedules.move(old, new)
         if gen:
             midcards.forget(self.lists_dir, old)
-            self._start_cards(new, conf.get("wrapper_start_cards") or "bump", conf.get("wrapper_end_cards") or conf.get("wrapper_start_cards") or "bump")
+            self._start_cards(new, conf.get("wrapper_start_cards") or "bump", conf.get("wrapper_end_cards") or conf.get("wrapper_start_cards") or "bump",
+                              conf.get("wrapper_gen_style"))
         job = self.jobs.start(new, 7, rebuild=True) if had_schedule else None
         return {"name": new, "old": old, "job": job}
 

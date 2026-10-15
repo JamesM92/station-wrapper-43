@@ -86,6 +86,13 @@ class Form(unittest.TestCase):
         self.assertFalse(form["gen_cards"])
         self.assertNotIn("wrapper_gen_cards", sf.to_conf(form))
 
+    def test_the_style_is_one_of_the_guides_looks_and_unknown_falls_back(self):
+        self.assertEqual(sf.validate(self.form(gen_style="midnight"), [], {}, None)["gen_style"], "midnight")
+        self.assertEqual(sf.validate(self.form(gen_style="neon"), [], {}, None)["gen_style"], "modern-blue")
+        conf = sf.to_conf(sf.validate(self.form(gen_style="emerald"), [], {}, None))
+        self.assertEqual(conf["wrapper_gen_style"], "emerald")
+        self.assertNotIn("wrapper_gen_style", sf.to_conf(sf.validate(self.form(), [], {}, None)))      # the default is not written
+
     def test_off_by_default(self):
         f = self.form()
         f.pop("gen_cards")
@@ -109,6 +116,8 @@ class Draw(unittest.TestCase):
                 out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0", path],
                                      capture_output=True, text=True).stdout.split()
                 self.assertIn("1280,720", out)
+            self.assertFalse(mc.current(root, "Toons", "sunset"))               # another style is drawn again
+            self.assertTrue(mc.current(root, "Toons", "modern-blue"))
             self.assertFalse(mc.current(root, "Toons 2"))                       # another name is another clip
             stale = mc.VERSION
             mc.VERSION = stale + 1

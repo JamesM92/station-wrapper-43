@@ -840,12 +840,12 @@ class GeneratedCardsApiTest(Base):
         self._draw = midcards.draw
         self.drawn = []
 
-        def fake(lists_dir, name, log=print):
+        def fake(lists_dir, name, style="modern-blue", log=print):
             os.makedirs(os.path.join(lists_dir, midcards.GEN_DIR), exist_ok=True)
             for kind in ("start", "end"):
                 open(os.path.join(lists_dir, midcards.GEN_DIR, midcards.clip_name(name, kind)), "w").close()
             data = midcards._manifest(lists_dir)
-            data[midcards.key(name)] = {"name": name, "version": midcards.VERSION}
+            data[midcards.key(name)] = {"name": name, "version": midcards.VERSION, "style": style}
             midcards._save_manifest(lists_dir, data)
             self.drawn.append(name)
         midcards.draw = fake
@@ -871,7 +871,7 @@ class GeneratedCardsApiTest(Base):
         self.assertTrue(self.api.get("Cartoons")["form"]["gen_cards"])
 
     def test_a_card_that_cannot_be_drawn_never_stops_the_save(self):
-        def boom(lists_dir, name, log=print):
+        def boom(lists_dir, name, style="modern-blue", log=print):
             raise self.mc.CardError("ffmpeg is not here")
         self.mc.draw = boom
         out = self.api.save(None, form(midcards=True, gen_cards=True))
@@ -903,6 +903,19 @@ class GeneratedCardsApiTest(Base):
         self.api.refresh_cards()
         self.wait("Cartoons")
         self.assertEqual(self.drawn, ["Cartoons"])
+
+    def test_the_style_is_kept_and_a_change_of_style_draws_again(self):
+        self.api.save(None, form(midcards=True, gen_cards=True, gen_style="emerald"))
+        self.wait("Cartoons")
+        self.assertEqual(self.console.confs["Cartoons"]["wrapper_gen_style"], "emerald")
+        self.assertEqual(self.api.get("Cartoons")["form"]["gen_style"], "emerald")
+        self.assertEqual(self.drawn, ["Cartoons"])
+        self.api.save("Cartoons", form(midcards=True, gen_cards=True, gen_style="sunset"))
+        self.wait("Cartoons")
+        self.assertEqual(self.drawn, ["Cartoons", "Cartoons"])                 # another style is another drawing
+        self.api.save("Cartoons", form(midcards=True, gen_cards=True, gen_style="sunset"))
+        self.wait("Cartoons")
+        self.assertEqual(self.drawn, ["Cartoons", "Cartoons"])                 # the same again is not
 
     def test_without_the_option_nothing_is_drawn(self):
         self.api.save(None, form(midcards=True))

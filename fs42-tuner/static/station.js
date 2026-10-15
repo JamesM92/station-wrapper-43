@@ -860,6 +860,7 @@
       form.bump_end = $("f-bumpend").value;
       form.midcards = $("f-cards").checked;
       form.gen_cards = $("f-cards").checked && $("f-gen").checked;
+      form.gen_style = $("f-gen-style").value;
       form.commercials = $("f-com").checked ? $("f-comlist").value : "";
     } else if (form.kind === "guide") {
       form.guide = {
@@ -897,6 +898,7 @@
       $("f-com").checked = !!form.commercials;
       $("f-cards").checked = form.midcards !== false;
       $("f-gen").checked = form.gen_cards === true;
+      $("f-gen-style").value = form.gen_style || "modern-blue";
       fields.commercials.set(form.commercials || (state.lists.includes("commercials") ? "commercials" : state.lists[0]));
       breaksChanged();
     } else if (form.kind === "guide") {

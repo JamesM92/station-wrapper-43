@@ -28,7 +28,7 @@ except ImportError:                     # drawing says so when asked; the rest o
 
 GEN_DIR = ".generated-cards"
 MANIFEST = "manifest.json"
-VERSION = 3                             # bump when the design changes: the cards are drawn again
+VERSION = 4                             # bump when the design changes: the cards are drawn again
 SIZE = (1280, 720)
 FPS = 30
 SECONDS = 2                             # short: a break's own time is for the commercials
@@ -39,7 +39,21 @@ SLICES = 14
 BRAND = "Station Wrapper 43"
 CAPTIONS = {"start": "We'll be right back", "end": "We're back with more"}
 FONT_BOLD = ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "DejaVuSans-Bold.ttf"]
-TOP, BOTTOM = (6, 16, 46), (14, 40, 100)      # the guide's dark blue gradient
+DEFAULT_STYLE = "modern-blue"             # the styles are the guide channel's themes (guide_channel.THEMES)
+
+
+def styles():
+    import guide_channel
+    return dict(guide_channel.THEME_NAMES)
+
+
+def _theme(style):
+    import guide_channel
+    return guide_channel.THEMES.get(style) or guide_channel.THEMES[DEFAULT_STYLE]
+
+
+def clean_style(style):
+    return style if style in styles() else DEFAULT_STYLE
 
 
 class CardError(Exception):
@@ -84,10 +98,10 @@ def _save_manifest(lists_dir, data):
     os.replace(tmp, os.path.join(_gen_dir(lists_dir), MANIFEST))
 
 
-def current(lists_dir, name):
-    """Are this channel's two clips there, drawn for this exact name and this design?"""
+def current(lists_dir, name, style=DEFAULT_STYLE):
+    """Are this channel's two clips there, drawn for this exact name, style and design?"""
     got = _manifest(lists_dir).get(key(name)) or {}
-    return (got.get("name") == name and got.get("version") == VERSION
+    return (got.get("name") == name and got.get("version") == VERSION and got.get("style", DEFAULT_STYLE) == clean_style(style)
             and all(os.path.isfile(os.path.join(_gen_dir(lists_dir), clip_name(name, k))) for k in ("start", "end")))
 
 
@@ -182,39 +196,42 @@ def _tint(img, rgb):
     return flat
 
 
-def _face(plane):
-    """The front of the letters: white at the top fading to a light blue, inside a dark blue edge."""
+def _face(plane, theme):
+    """The front of the letters: the theme's text colour at the top fading to its dim colour, inside the theme's dark edge."""
     w, h = plane.size
+    top, low = theme["text"], theme["dim"]
     grad = Image.new("RGB", (1, h))
-    grad.putdata([(255, 255, 255) if y < h * 0.25 else (int(255 - 70 * (y - h * 0.25) / (h * 0.75)), int(255 - 40 * (y - h * 0.25) / (h * 0.75)), 255) for y in range(h)])
+    grad.putdata([tuple(int(top[i] + (low[i] - top[i]) * max(0.0, (y - h * 0.25) / (h * 0.75))) for i in range(3)) for y in range(h)])
     face = grad.resize((w, h)).convert("RGBA")
     face.putalpha(plane.getchannel("A"))
-    edge = _tint(plane.filter(ImageFilter.MaxFilter(7)), (8, 28, 80))
+    edge = _tint(plane.filter(ImageFilter.MaxFilter(7)), tuple(theme["header"][:3]))
     edge.alpha_composite(face)
     return edge
 
 
-def _background():
+def _background(theme):
+    top, bottom = theme["bg_top"], theme["bg_bottom"]
     col = Image.new("RGB", (1, SIZE[1]))
-    col.putdata([tuple(int(TOP[i] + (BOTTOM[i] - TOP[i]) * y / (SIZE[1] - 1)) for i in range(3)) for y in range(SIZE[1])])
+    col.putdata([tuple(int(top[i] + (bottom[i] - top[i]) * y / (SIZE[1] - 1)) for i in range(3)) for y in range(SIZE[1])])
     return col.resize(SIZE)
 
 
-def _text_frames(name):
+def _text_frames(name, theme):
     """Yield the picture of the turned text for each frame (a full-frame RGBA and where the text is). The two lines are one
     plane, so they turn as one rigid body: a swing back and forth over the clip, easing at each end so it loops without a
     jump, with a small nod a quarter of a swing behind it. Its thickness is a stack of copies of the letters' own shape."""
     plane = _plane(name)
     pad = 8
     w, h = plane.size
-    face = _face(plane)
+    face = _face(plane, theme)
+    side_rgb = tuple(theme["cell_edge"][:3])
     cx, cy = SIZE[0] / 2, SIZE[1] * 0.40
     total = FPS * SECONDS
     layers = []
     for s in range(SLICES, 0, -1):
         depth = s / SLICES
         lit = 1 - 0.65 * depth                                         # lighter at the front edge, darker toward the back
-        layers.append((-DEPTH * depth, _tint(plane, (int(40 * lit), int(110 * lit), int(235 * lit)))))
+        layers.append((-DEPTH * depth, _tint(plane, tuple(int(c * lit) for c in side_rgb))))
     for i in range(total):
         phase = 2 * math.pi * i / total
         theta = math.radians(SWING) * math.sin(phase)
@@ -265,7 +282,7 @@ def _encoder(path):
         raise CardError(f"ffmpeg could not be started: {e}")
 
 
-def draw(lists_dir, name, log=print):
+def draw(lists_dir, name, style=DEFAULT_STYLE, log=print):
     """Draw both clips for a channel into the shared folder (one pass over the 3D frames, two encoders), and note what they
     were drawn for. CardError on failure (nothing half written is left behind)."""
     if Image is None:
@@ -274,7 +291,9 @@ def draw(lists_dir, name, log=print):
         raise CardError("the channel has no name to draw")
     out = _gen_dir(lists_dir)
     os.makedirs(out, exist_ok=True)
-    bg = _background().convert("RGBA")
+    style = clean_style(style)
+    theme = _theme(style)
+    bg = _background(theme).convert("RGBA")
     jobs = []
     try:
         for kind, text in CAPTIONS.items():
@@ -283,7 +302,7 @@ def draw(lists_dir, name, log=print):
             base = bg.copy()
             base.alpha_composite(_caption(text))
             jobs.append({"final": final, "tmp": tmp, "base": base, "proc": _encoder(tmp)})
-        for layer, at in _text_frames(str(name)):
+        for layer, at in _text_frames(str(name), theme):
             for j in jobs:
                 frame = j["base"].copy()
                 # the caption is under the text where they meet (they do not, but keep the order the picture is read in)
@@ -306,7 +325,7 @@ def draw(lists_dir, name, log=print):
             if os.path.exists(j["tmp"]):
                 os.unlink(j["tmp"])
     data = _manifest(lists_dir)
-    data[key(name)] = {"name": name, "version": VERSION}
+    data[key(name)] = {"name": name, "version": VERSION, "style": style}
     _save_manifest(lists_dir, data)
     log(f"[cards] drew the mid cards for '{name}'")
 

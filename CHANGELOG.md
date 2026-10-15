@@ -59,7 +59,8 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
   from your lists and these like any other card, and your lists are never changed (a list shared by several channels stays as it is):
   the clips sit together in one hidden folder, and each channel's own hidden break folder links to its two clips and to your chosen
   lists. They are drawn in the background on save and again on a rename, and a failure only shows a note on the station: it plays its
-  lists as before.
+  lists as before. The cards can be drawn in any of the guide's looks (Modern blue, Midnight, Classic cable, Emerald, Sunset), chosen
+  beside the option, so a channel's cards and its guide can match; changing it draws them again.
 - **The channel guide merges clips too small to read.** A run of programmes that are each too narrow to show a name (a feed of short
   clips) is drawn as one cell over the whole run, which names its clips in turn (a long name moves along the cell while it is up)
   and says how many clips it holds and the time it covers. While one of them is on air its name is marked with ▶ and comes
