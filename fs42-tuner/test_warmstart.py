@@ -106,5 +106,38 @@ class Handover(unittest.TestCase):
         self.channel()._drop_warm()
 
 
+class JoinReport(unittest.TestCase):
+    def setUp(self):
+        tuner.JOINS.clear()
+
+    def row(self, gap, flags=(), frm="commercial", ts=None):
+        tuner.JOINS.append({"ts": ts or time.time(), "at": "12:00:00", "channel": "3", "station": "Toons", "from": frm, "to": "feature",
+                            "flags": list(flags), "first_picture_s": 0.7, "late_s": gap, "file": "a.mkv"})
+
+    def test_the_summary_is_of_the_last_hour_and_splits_warm_from_plain(self):
+        for g in (0.1, 0.2, 0.3):
+            self.row(g, ["warm"])
+        for g in (0.8, 1.6):
+            self.row(g)
+        self.row(5.0, ts=time.time() - 7200)                                       # two hours ago: not in the summary
+        rep = tuner.joins_report()
+        self.assertEqual(rep["summary"]["count"], 5)
+        self.assertEqual(rep["summary"]["worst_s"], 1.6)
+        self.assertEqual(rep["summary"]["slow"], 1)
+        self.assertEqual(rep["summary"]["by"]["warm"]["median_s"], 0.2)
+        self.assertEqual(rep["summary"]["by"]["plain"]["count"], 2)
+        self.assertEqual(rep["recent"][0]["late_s"], 5.0)                          # newest first would be the last appended
+        self.assertEqual(len(rep["recent"]), 6)
+
+    def test_a_tune_in_has_no_gap_and_is_counted_apart(self):
+        self.row(None, frm="tune-in")
+        rep = tuner.joins_report()
+        self.assertEqual(rep["summary"]["by"]["tune-in"]["count"], 1)
+        self.assertEqual(rep["summary"]["median_s"], 0.7)                          # the time to the first picture stands in
+
+    def test_nothing_recorded_is_an_empty_summary(self):
+        self.assertEqual(tuner.joins_report(), {"summary": {"count": 0}, "recent": []})
+
+
 if __name__ == "__main__":
     unittest.main()

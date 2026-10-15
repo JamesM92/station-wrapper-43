@@ -30,6 +30,10 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
   duplicate warnings (beside the list they are in) and the **Rescan** button are on the Lists & files page, above the lists.
 
 ### Added
+- **A record of the joins between pieces.** The dashboard has a *Joins* card and a *Recent joins* table: for each cut between pieces,
+  how late its picture came against when the schedule had it due, whether it was warm-started or read ahead, and (as a median,
+  90th percentile and worst over the last hour) how the warm ones compare with the plain ones. A tune-in is counted apart, by its time to
+  the first picture. A join slower than a second is also written to the log. It is kept in memory (the last 200).
 - **Big files on a share are read through a read-ahead server.** A file of 256 MB or more on a network share is played through a
   small server inside the container that holds a head start in the RAM disk (then a local disk folder, `catalog/.prefetch`, up to
   `PREFETCH_DISK_GB`, 30 by default) and drops what has been played. How much it holds ahead is worked out from what the share is

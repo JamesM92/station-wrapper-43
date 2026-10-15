@@ -485,6 +485,9 @@ class Channel:
 
     _warm = None                              # the next piece, already started and held (see _prepare_next)
     _warm_timer = None
+    _last_chunk_at = None                     # when the last bytes were sent into the channel (to measure the gap at a join)
+    _prev_kind = None                         # what kind of piece that was (commercial, bump, feature)
+    _join_meta = None                         # what the piece about to play is, for the join report
 
     @property
     def _warm_lock(self):
@@ -744,6 +747,9 @@ class Channel:
             subs = caption_filter(self.station, entry, path, local, cur.seek)
             inject = caption_injector(self.station, entry, path, cur.seek)
             began = time.time()
+            self._join_meta = {"to": entry.content_type, "file": name, "due": time.time() - cur.offset,
+                               "flags": [f for f, on in (("warm", warm is not None), ("read-ahead", bool(stream_url)),
+                                                         ("copy", bool(pinned))) if on]}
             self._arm_warm(entry, cur, began)                    # and the one after it, a few seconds before this one ends
             if warm is not None:
                 sent = self._pipe(None, label=name, cached=pinned, inject=inject, proc=warm["proc"])
@@ -761,6 +767,7 @@ class Channel:
                                               ordered=inject is not None, audio=audio_level_filter(self.station, entry, path)),
                                   label=name, cached=pinned, inject=inject)
             self.clock += cur.remaining
+            self._prev_kind = entry.content_type
             if sent < 1024 and not entry.is_stream and not self.stop.is_set() and not self.reload.is_set():
                 # ffmpeg gave nothing for a file that is there: it can't be read. Say so, and don't spin on it.
                 print(f"[ch{self.number}] bad file (nothing came out of it): {path}", flush=True)
@@ -951,9 +958,20 @@ class Channel:
                 if first:                  # how long a file took to start: slow ones are what a viewer sees as buffering
                     first = False
                     took = time.time() - began
+                    meta, self._join_meta = self._join_meta, None
+                    if meta is not None:
+                        # how late the picture was against when the schedule had it due; for a tune-in (the piece was
+                        # already part way through) only the time to the first picture means anything
+                        tune_in = self._prev_kind is None
+                        late = None if tune_in else time.time() - meta["due"]
+                        record_join({"ts": time.time(), "at": datetime.now().strftime("%H:%M:%S"), "channel": self.number,
+                                     "station": self.station, "from": self._prev_kind or "tune-in", "to": meta["to"],
+                                     "flags": meta["flags"], "first_picture_s": round(took, 2),
+                                     "late_s": round(late, 2) if late is not None else None, "file": meta["file"]})
                     if label and took > SLOW_START_SECONDS:
                         print(f"[ch{self.number}] {label} took {took:.1f}s to start" + (" (from the read-ahead copy)" if cached else " (from the share)"), flush=True)
                 sent += len(chunk)
+                self._last_chunk_at = time.time()
                 chunk, inject = caption_feed(inject, chunk, self.number)
                 if chunk:
                     self._broadcast(chunk)
@@ -1080,6 +1098,46 @@ def _seconds(name, default):
         return max(float(text), 0.0) if text else default
     except ValueError:
         return default
+
+
+# The joins between pieces on every channel, newest last: what a viewer's player lives with. Kept in memory (the last 200).
+JOINS = deque(maxlen=200)
+JOIN_SLOW = 1.0                      # seconds: a join slower than this is written to the log
+
+
+def record_join(row):
+    JOINS.append(row)
+    waited = row["late_s"] if row.get("late_s") is not None else row["first_picture_s"]
+    if waited > JOIN_SLOW:
+        print(f"[ch{row['channel']}] slow join: {row['from']} -> {row['to']} ({row['file']}): "
+              + (f"its picture was {row['late_s']:.1f}s later than due" if row.get("late_s") is not None
+                 else f"{row['first_picture_s']:.1f}s to the first picture")
+              + (f" [{', '.join(row['flags'])}]" if row["flags"] else ""), flush=True)
+
+
+def joins_report(now=None, recent=20):
+    """The last joins and a summary of the last hour: how late each piece's picture came against when the schedule had it due
+    (or, for a tune-in, the time to the first picture), by median, 90th percentile and worst, with warm starts against plain."""
+    now = now or time.time()
+    rows = [r for r in list(JOINS)]
+    hour = [r for r in rows if r["ts"] >= now - 3600]
+
+    def wait(r):
+        return max(0.0, r["late_s"]) if r.get("late_s") is not None else r["first_picture_s"]
+    vals = sorted(wait(r) for r in hour)
+    summary = {"count": len(vals)}
+    if vals:
+        summary.update(median_s=round(vals[len(vals) // 2], 2), p90_s=round(vals[min(len(vals) - 1, int(0.9 * len(vals)))], 2),
+                       worst_s=round(vals[-1], 2),
+                       slow=sum(1 for v in vals if v > JOIN_SLOW))
+        by = {}
+        for r in hour:
+            key = "warm" if "warm" in r["flags"] else ("tune-in" if r["from"] == "tune-in" else "plain")
+            by.setdefault(key, []).append(wait(r))
+        summary["by"] = {k: {"count": len(v), "median_s": round(sorted(v)[len(v) // 2], 2)} for k, v in by.items()}
+    last = [{k: r.get(k) for k in ("at", "channel", "station", "from", "to", "flags", "first_picture_s", "late_s", "file")}
+            for r in rows[-recent:]]
+    return {"summary": summary, "recent": list(reversed(last))}
 
 
 WARM_LEAD = _seconds("WARM_START_SECONDS", 4.0)
@@ -1552,6 +1610,7 @@ def system_status():
                      "channels_on_air": sum(1 for r in channels_status() if r["on_air"])},
         "guide": GUIDE.stats,
         "prefetch": prefetch_status,
+        "joins": joins_report(),
     }
 
 

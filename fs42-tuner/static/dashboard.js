@@ -72,6 +72,7 @@
            guideAge == null),
       readAheadCard(sys.prefetch),
       bigFilesCard(sys.prefetch && sys.prefetch.stream),
+      joinsCard(sys.joins),
       card("Uptime", fmtUptime(sys.uptime_seconds), "", false),
     ].join("");
   }
@@ -83,6 +84,30 @@
     const shares = Object.entries(p.shares || {}).map(([k, v]) => `${k.split("/").pop()}: ${v.mb_per_s != null ? v.mb_per_s + " MB/s" : "measuring"}, ${v.delay_s != null ? v.delay_s + "s to open" : ""}`).join("; ");
     return card("Read-ahead", `${p.cache.used_mb} / ${p.cache.max_mb} MB`,
                 `${p.cache.files} files in ${p.ram ? "RAM" : "disk"}` + (p.copying ? `, copying ${p.copying}` : "") + (shares ? ` · ${shares}` : ""), false);
+  }
+
+  // the joins between pieces: how long a viewer waited at each, over the last hour (tuner.py: joins_report)
+  function joinsCard(j) {
+    if (!j || !j.summary || !j.summary.count) return card("Joins", "none yet", "how late each piece's picture comes at a cut is recorded here", false);
+    const s = j.summary;
+    const by = Object.entries(s.by || {}).map(([k, v]) => `${k} ${v.median_s}s (${v.count})`).join(", ");
+    return card("Joins", `${s.median_s}s median`, `${s.count} in the last hour, slowest ${s.worst_s}s` + (by ? ` · ${by}` : ""),
+                s.p90_s > 1.0);
+  }
+
+  function renderJoins(j) {
+    const el = document.getElementById("joins");
+    if (!el) return;
+    const rows = (j && j.recent) || [];
+    el.hidden = !rows.length;
+    if (!rows.length) return;
+    el.innerHTML = `<details><summary>Recent joins (${rows.length})</summary><table class="joins"><thead><tr>
+      <th>Time</th><th>Channel</th><th>From</th><th>To</th><th>Late by</th><th>First picture</th><th>How</th><th>File</th></tr></thead><tbody>` +
+      rows.map((r) => {
+        const waited = r.late_s != null ? Math.max(0, r.late_s) : r.first_picture_s;
+        return `<tr class="${waited > 1 ? "slow" : ""}"><td>${esc(r.at)}</td><td>${esc(r.channel)}</td><td>${esc(r.from)}</td><td>${esc(r.to)}</td>
+          <td>${waited.toFixed(2)} s</td><td>${r.first_picture_s.toFixed(2)} s</td><td>${esc((r.flags || []).join(", ") || "plain")}</td><td>${esc(r.file)}</td></tr>`;
+      }).join("") + "</tbody></table></details>";
   }
 
   // big files on a share, read through the local read-ahead server (streaming.py): what each is holding ahead of where it plays
@@ -184,6 +209,7 @@
         fetch("/channels.json").then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }),
       ]);
       renderStats(sys);
+      renderJoins(sys.joins);
       renderChannels(chans);
       statusEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
       statusEl.classList.remove("error");

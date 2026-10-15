@@ -244,3 +244,9 @@
 .lib-summary { color: var(--dim); flex: 1; }
 .lib-summary.warn { color: var(--danger); }
 .badge.warn { border-color: var(--danger); color: var(--danger); }
+
+/* the joins between pieces (tuner.py: joins_report) */
+#joins summary { cursor: pointer; font-weight: 600; }
+table.joins { width: 100%; border-collapse: collapse; margin-top: 0.5em; font-size: 0.85em; }
+table.joins th, table.joins td { text-align: left; padding: 0.2em 0.6em; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.joins tr.slow td { color: var(--warn, #ffb454); }
