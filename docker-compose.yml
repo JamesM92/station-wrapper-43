@@ -126,6 +126,12 @@ services:
       PREFETCH_RAM: ${PREFETCH_RAM:-1}
       PREFETCH_DIR: ${PREFETCH_DIR:-/cache}
       PREFETCH_MAX_MB: ${PREFETCH_MAX_MB:-5400}
+      # Big files (256 MB or more) on a network share are read through a small local server that holds a head start in the RAM
+      # disk above and then a folder on local disk (catalog/.prefetch, up to PREFETCH_DISK_GB), sized from what the share is
+      # doing now and dropped as it plays, so a long film does not wait for the share at a join. PREFETCH_STREAM=0 turns it off.
+      PREFETCH_STREAM: ${PREFETCH_STREAM:-}
+      PREFETCH_DISK_GB: ${PREFETCH_DISK_GB:-}
+      PREFETCH_DISK_DIR: ${PREFETCH_DISK_DIR:-}
       # The TubeArchivist conversion (TA_NFOWriter builds a readable "view" of symlinks in the catalog
       # volume) is switched on from the dashboard: http://<host>:5004/files.html, "YouTube (TubeArchivist)".
       # You pick the folder there; nothing here is needed. These three are only STARTING VALUES for the

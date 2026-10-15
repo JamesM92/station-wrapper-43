@@ -71,6 +71,7 @@
            guide.fs42 ? `${guide.fs42.channels} channels, ${guide.fs42.programmes} programmes` : "",
            guideAge == null),
       readAheadCard(sys.prefetch),
+      bigFilesCard(sys.prefetch && sys.prefetch.stream),
       card("Uptime", fmtUptime(sys.uptime_seconds), "", false),
     ].join("");
   }
@@ -82,6 +83,19 @@
     const shares = Object.entries(p.shares || {}).map(([k, v]) => `${k.split("/").pop()}: ${v.mb_per_s != null ? v.mb_per_s + " MB/s" : "measuring"}, ${v.delay_s != null ? v.delay_s + "s to open" : ""}`).join("; ");
     return card("Read-ahead", `${p.cache.used_mb} / ${p.cache.max_mb} MB`,
                 `${p.cache.files} files in ${p.ram ? "RAM" : "disk"}` + (p.copying ? `, copying ${p.copying}` : "") + (shares ? ` · ${shares}` : ""), false);
+  }
+
+  // big files on a share, read through the local read-ahead server (streaming.py): what each is holding ahead of where it plays
+  function bigFilesCard(s) {
+    if (!s || !s.enabled) return "";
+    const files = s.files || [];
+    const short = files.filter((f) => f.short_mb > 0);
+    const detail = files.slice(0, 4).map((f) => {
+      const note = f.streams_live ? "streams live" : `${f.have_mb} of ${f.wanted_mb} MB held`;
+      return `${esc(f.file)}: ${f.state}, ${note}` + (f.short_mb > 0 ? `, short by ${f.short_mb} MB` : "");
+    }).join("; ");
+    return card("Big files", files.length ? `${s.ram_mb} MB RAM + ${s.disk_mb} MB disk` : "nothing playing",
+                files.length ? detail : `files of ${s.min_mb} MB or more on a share are read ahead`, short.length > 0);
   }
 
   function renderChannels(rows) {

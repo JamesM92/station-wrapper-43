@@ -77,6 +77,7 @@ import diag
 import iptv
 import legacy
 import prefetch
+import streaming
 import schedules
 import library
 import resolver
@@ -731,11 +732,14 @@ class Channel:
         warm = self._take_warm(path, cur)                       # this very piece, started a few seconds early, or None
         if warm is not None:
             local, pinned = warm["local"], warm["pinned"]
+            stream_url = warm.get("stream_url")
         else:
             local, pinned = (path, False) if entry.is_stream else PREFETCH.pin(path)     # a copy made ahead of time, if there is one
+            stream_url = None if (pinned or entry.is_stream) else stream_open(path, cur.seek)    # else a big file on a share: through the server
+        play = stream_url or local
         print(f"[ch{self.number}] {cur.block_title} :: {os.path.basename(entry.path)} "
               f"@{cur.seek:.0f}s for {cur.remaining:.0f}s ({entry.content_type})" + (" [from the read-ahead copy]" if pinned else "")
-              + (" [warm start]" if warm is not None else ""))
+              + (" [read ahead]" if stream_url else "") + (" [warm start]" if warm is not None else ""))
         try:
             subs = caption_filter(self.station, entry, path, local, cur.seek)
             inject = caption_injector(self.station, entry, path, cur.seek)
@@ -744,10 +748,17 @@ class Channel:
             if warm is not None:
                 sent = self._pipe(None, label=name, cached=pinned, inject=inject, proc=warm["proc"])
             else:
-                sent = self._pipe(segment_cmd(local, cur.seek, cur.remaining, entry.is_stream, self.clock if CONTINUOUS_TS else None,
+                sent = self._pipe(segment_cmd(play, cur.seek, cur.remaining, entry.is_stream, self.clock if CONTINUOUS_TS else None,
                                               text=offair, subs=subs,
                                               ordered=inject is not None,
                                               audio=audio_level_filter(self.station, entry, path)),
+                                  label=name, cached=pinned, inject=inject)
+            if sent < 1024 and stream_url and not self.stop.is_set() and not self.reload.is_set():
+                # the server could not give it: read the file as it is, now, and leave it out of the server for a while
+                print(f"[ch{self.number}] the read-ahead server gave nothing for {name}: reading it directly", flush=True)
+                STREAMER.mark_failed(stream_url)
+                sent = self._pipe(segment_cmd(local, cur.seek, cur.remaining, entry.is_stream, None, text=offair, subs=subs,
+                                              ordered=inject is not None, audio=audio_level_filter(self.station, entry, path)),
                                   label=name, cached=pinned, inject=inject)
             self.clock += cur.remaining
             if sent < 1024 and not entry.is_stream and not self.stop.is_set() and not self.reload.is_set():
@@ -758,6 +769,8 @@ class Channel:
         finally:
             if pinned:
                 PREFETCH.unpin(path)
+            if stream_url:
+                STREAMER.close(stream_url)
 
     def _run_guide(self, conf):
         """The guide channel: draw frames (guide_channel.py) into one ffmpeg with the music underneath, until the
@@ -865,16 +878,17 @@ class Channel:
             if self.stop.is_set() or self.reload.is_set():
                 return
             local, pinned = PREFETCH.pin(path)
+            stream_url = None if pinned else stream_open(path, e.skip)
             offair = offair_reason(self.station, e, nxt.block_title)
             began = time.time()
             subs = caption_filter(self.station, e, path, local, e.skip)
             inject_ok = caption_injector(self.station, e, path, e.skip) is not None
-            cmd = segment_cmd(local, e.skip, nxt.remaining + nxt.offset, False, clock_next if CONTINUOUS_TS else None, text=offair,
+            cmd = segment_cmd(stream_url or local, e.skip, nxt.remaining + nxt.offset, False, clock_next if CONTINUOUS_TS else None, text=offair,
                               subs=subs, ordered=inject_ok, audio=audio_level_filter(self.station, e, path), lead=lead)
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
             with self._warm_lock:
                 old, self._warm = self._warm, {"proc": proc, "path": path, "skip": e.skip, "local": local, "pinned": pinned,
-                                               "began": began, "lead": lead}
+                                               "began": began, "lead": lead, "stream_url": stream_url}
             if old:
                 self._release(old)
         except resolver.ScheduleGap:
@@ -908,6 +922,8 @@ class Channel:
             pass
         if warm.get("pinned"):
             PREFETCH.unpin(warm["path"])
+        if warm.get("stream_url"):
+            STREAMER.close(warm["stream_url"])
 
     def _drop_warm(self):
         with self._warm_lock:
@@ -1076,6 +1092,44 @@ if not os.environ.get("PREFETCH_STATS"):                    # what it has learne
 PREFETCH = prefetch.Prefetcher(_PREFETCH_CFG, DB_PATH,
                                watched=lambda: {n: c.station for n, c in CHANS.items() if c.subs},
                                media_root=CONF.get("media_root", "/mnt/media"), path_of=lambda p: media_path(p))
+# Big files on a network share are read through a small local server that holds a head start in RAM (then a local disk
+# folder) and drops what has been played (streaming.py). Small files and files on local disk are read as before.
+def _file_rate(real):
+    """The bytes per second a video plays at (its size over the catalog's duration for it), or None when not known."""
+    try:
+        size = os.stat(real).st_size
+        with sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=2) as conn:
+            row = conn.execute("SELECT duration FROM catalog_entries WHERE realpath = ? OR path = ? ORDER BY duration DESC LIMIT 1",
+                               (real, real)).fetchone()
+        return size / row[0] if row and row[0] and row[0] > 30 else None
+    except Exception:
+        return None
+
+
+_STREAM_CFG = streaming.env_config()
+STREAMER = streaming.Streamer(
+    _STREAM_CFG if PREFETCH.enabled else {**_STREAM_CFG, "enabled": False}, PREFETCH.stats, CONF.get("media_root", "/mnt/media"),
+    os.path.join(PREFETCH.cfg["dir"], "stream") if PREFETCH.enabled else None,
+    (lambda: max(0, PREFETCH.cache.max_bytes - PREFETCH.cache.held_bytes())) if PREFETCH.enabled else (lambda: 0),
+    (_STREAM_CFG["disk_dir"] or os.path.join(CATALOG_ROOT, "catalog", ".prefetch")) if PREFETCH.enabled and _STREAM_CFG["disk_bytes"] > 0 else None,
+    rate_of=_file_rate)
+if PREFETCH.enabled:
+    PREFETCH.cache.external = lambda: STREAMER.used["ram"]       # what the server holds in the RAM disk counts against it
+    PREFETCH.streamer = STREAMER
+
+
+def stream_open(path, seek):
+    """The URL to read a file through the read-ahead server, or None (read the file as it is): it is not a big file on a share,
+    or the server is off or cannot take it."""
+    try:
+        real = os.path.realpath(path)
+        if STREAMER.qualifies(real):
+            return STREAMER.open(real, seek)
+    except Exception as e:
+        print(f"[stream] {os.path.basename(path)}: {e}", flush=True)
+    return None
+
+
 LEVELS = loudness.Levels(os.path.join(os.path.dirname(settings.PATH), "loudness.json"), LIBRARY_ROOT,
                          target_fn=lambda: settings.get_loudness()["target"])
 VIEWERS = threading.BoundedSemaphore(TUNER_COUNT)
@@ -2541,6 +2595,7 @@ if __name__ == "__main__":
         print(f"[prefetch] on: next-break and next-episode copies in {PREFETCH.cfg['dir']} "
               f"({'RAM' if PREFETCH.cfg['ram_only'] else 'disk'}), up to {PREFETCH.cache.max_bytes // 1048576} MB", flush=True)
         threading.Thread(target=PREFETCH.loop, daemon=True, name="prefetch").start()
+        STREAMER.start()
     else:
         print(f"[prefetch] off: {PREFETCH.why_not}", flush=True)
     library.load_saved(LIBRARY_ROOT)                  # the pages show the last scan straight away, even after a restart

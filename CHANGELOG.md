@@ -30,6 +30,14 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
   duplicate warnings (beside the list they are in) and the **Rescan** button are on the Lists & files page, above the lists.
 
 ### Added
+- **Big files on a share are read through a read-ahead server.** A file of 256 MB or more on a network share is played through a
+  small server inside the container that holds a head start in the RAM disk (then a local disk folder, `catalog/.prefetch`, up to
+  `PREFETCH_DISK_GB`, 30 by default) and drops what has been played. How much it holds ahead is worked out from what the share is
+  doing now: `bytes still to play x (1 - share speed / the file's own rate)`, never under about a minute, so it starts at a few GB for
+  a long film on a slow share and falls to nothing by the end. A read waits for its bytes, so playing never gets ahead of what has
+  arrived; pulling ahead takes at most half of the share's measured speed; the join due soonest is served first, and the
+  dashboard's *Big files* card shows what each file has and is short by. `PREFETCH_STREAM=0` turns it off; any error plays the file
+  directly as before.
 - **Warm start.** Each piece of a channel is now started before it is due, so its picture comes out when it should instead of
   after the file has been opened and the encoder has started. A part of a show that resumes after a break is started 4 seconds
   early (`WARM_START_SECONDS`, 0 switches it off) so that the open and the seek happen while the commercials or cards are still

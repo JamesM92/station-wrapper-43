@@ -138,6 +138,22 @@ class Stats:
             bps = self._pick(v, 0.25) if v else ASSUMED_BPS
         return delay + size / max(bps, 1.0)
 
+    def record_speed(self, share, bps):
+        """One measured read of the share (bytes per second), from the read-ahead server."""
+        with self.lock:
+            self.speed.setdefault(share, deque(maxlen=SAMPLES)).append(float(bps))
+
+    def speed_of(self, share):
+        """The share's speed in bytes per second, on the pessimistic side (what it did lately, slowest quarter)."""
+        with self.lock:
+            v = self.speed.get(share)
+            return self._pick(v, 0.25) if v else float(ASSUMED_BPS)
+
+    def delay_of(self, share):
+        with self.lock:
+            d = self.delay.get(share)
+            return self._pick(d, 0.75) if d else float(ASSUMED_DELAY)
+
     def summary(self):
         with self.lock:
             out = {}
@@ -157,6 +173,7 @@ class Cache:
         self.lock = threading.Lock()
         self.items = {}                       # source path -> {"file", "size", "used", "pins"}
         self.reserved = 0                     # bytes promised to copies in progress
+        self.external = lambda: 0             # bytes of this folder that something else (the read-ahead server) holds
         os.makedirs(folder, exist_ok=True)
         for name in os.listdir(folder):       # whatever an earlier run left is not trusted: start empty
             try:
@@ -168,6 +185,11 @@ class Cache:
         return hashlib.sha1(src.encode("utf-8", "replace"), usedforsecurity=False).hexdigest()[:20] + os.path.splitext(src)[1][:8]
 
     def used_bytes(self):
+        with self.lock:
+            return sum(i["size"] for i in self.items.values()) + self.reserved + self.external()
+
+    def held_bytes(self):
+        """What whole-file copies hold (and are promised): not the read-ahead server's own blocks."""
         with self.lock:
             return sum(i["size"] for i in self.items.values()) + self.reserved
 
@@ -200,7 +222,7 @@ class Cache:
         """Free space for `size` more bytes by dropping the oldest copies that are not playing and not in `keep`.
         True if it now fits (the room is reserved), False if it can't."""
         with self.lock:
-            used = sum(i["size"] for i in self.items.values()) + self.reserved
+            used = sum(i["size"] for i in self.items.values()) + self.reserved + self.external()
             if used + size > self.max_bytes:
                 for src, item in sorted(self.items.items(), key=lambda kv: kv[1]["used"]):
                     if used + size <= self.max_bytes:
@@ -332,6 +354,7 @@ class Prefetcher:
         self.current = {}                    # source path -> True while being copied
         self.stop_event = threading.Event()
         self.plans = {}                      # channel -> the last wanted() list, for the status page
+        self.streamer = None                 # the read-ahead server for big files (streaming.py), set by the tuner
         self._start_cache()
 
     def _start_cache(self):
@@ -382,7 +405,11 @@ class Prefetcher:
                     e["path"] = self.path_of(e["path"])
             except Exception:
                 continue
+            if self.streamer is not None and self.streamer.started:
+                self._hand_to_streamer(entries)
             want = wanted(entries, self.cfg["depth"])
+            if self.streamer is not None and self.streamer.started:
+                want = [w for w in want if not self.streamer.qualifies(w["path"])]     # a big file on a share is read through the server
             self.plans[number] = [{"path": os.path.basename(w["path"]), "why": w["why"]} for w in want]
             keep.update(w["path"] for w in want)
             by_group = {}
@@ -418,6 +445,18 @@ class Prefetcher:
                 if self._start_copy(path, size, share, keep):
                     started.append(path)
         return started
+
+    def _hand_to_streamer(self, entries):
+        """Every big file on a share that is coming up, with when it is due and where it will start playing: the server
+        starts pulling its head far enough ahead for what the share is doing now."""
+        from datetime import datetime
+        t0, wall = datetime.now(), self.now()
+        for e in entries:
+            if e["stream"] or e["type"] in BREAK_TYPES:
+                continue
+            path = e["path"]
+            if self.streamer.qualifies(path):
+                self.streamer.prepare(path, e["seek"], wall + max(0.0, (e["start"] - t0).total_seconds()))
 
     def _start_copy(self, path, size, share, keep):
         with self.lock:
@@ -465,4 +504,6 @@ class Prefetcher:
             return out
         out.update(cache=self.cache.summary(), shares=self.stats.summary(), copying=sum(self.copying.values()),
                    channels={str(k): v for k, v in self.plans.items()})
+        if self.streamer is not None:
+            out["stream"] = self.streamer.status()
         return out
