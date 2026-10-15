@@ -71,12 +71,22 @@ Does TVHeadend want `tvg-chno` or the channel's name as the key? Both need tryin
 
 ## 2. Playback: the lag between clips
 
-- `CONTINUOUS_TS=1` removed the freezes in a test (26.6 s frozen over 70 s down to 0) but is **off by default** and
-  untried on real transitions. Try it on the real stations, then make it the default.
-- Start the next clip's ffmpeg a few seconds before the current one ends, so a slow seek on the share is spent before the cut.
-- Log the real gap at every transition (the tuner has the times) so there are numbers from the real setup.
-- The media share reads at about 5.6 MB/s (tried: `dd` and `ffprobe` timings). That alone makes seeks slow. Check the CIFS
-  mount options (`vers=`, `cache=`, `rsize`) and the NAS; read-ahead (`prefetch.py`) helps but cannot make up for it.
+Done 2026-10-15 (built and unit tested, run against the real tuner with a synthetic schedule; **not yet watched on the real server**):
+- **Warm start**: the next piece is started before it is due (a resumed show part 4 s early, reading from earlier in its file; any
+  other piece 0.8 s early). `WARM_START_SECONDS`, 0 turns it off. See `tuner.py` (`_arm_warm`, `_prepare_next`, `_take_warm`).
+- **The read-ahead server** (`streaming.py`): a file of 256 MB or more on a network share is played through a local range server that
+  holds a head start sized from the share's current speed, RAM first then `catalog/.prefetch`, and drops what has played.
+- **A record of the joins** (`joins_report`, the dashboard's *Joins* card and table): how late each piece's picture came against the
+  schedule, warm against plain.
+- **A switch for continuous timestamps** on the Stations page (off by default). To do: run it on for a day, compare the Joins card, then
+  decide the default.
+
+Still open:
+- A long-lived encoder per channel instead of an ffmpeg per piece would remove the remaining ~0.6 s start-up at every join. A large
+  redesign of the playback path; only if the Joins card says the joins still hurt.
+- A viewer who tunes in part way through a film pays the on-demand reads (a decision, 2026-10-15: that is the nature of it).
+- The media share reads at about 5.6 MB/s on a good day and far less during a resilver; check the CIFS mount options
+  (`vers=`, `cache=`, `rsize`) and the NAS. The read-ahead cannot make up for a share slower than a film's own bitrate.
 
 ## 3. Breaks and the engine
 
@@ -119,6 +129,10 @@ Built and tried against the real HDHomeRun FLEX 4K (`192.168.1.20`) and local st
   the `.nfo` link sits beside the video inside the list); the likely cause is a list that has the video but not its `.nfo`.
 
 ## 6. Smaller items
+
+- **A "coming up" card for a show's next premiere** (parked 2026-10-15): drawn per show each week from the premiere schedule, using
+  FieldStation42's own `next/` bumper folders. Wanted only if the preview in the slot editor is not enough.
+- **Per-station colours beyond the guide's themes** for the generated mid cards; not asked for.
 
 - **IPTV captions** (shelved by the owner): needs the subtitles put into the stream; see the memory note.
 - **Rename the `bump` folder** to something like `midcards`: the screens already say "channel mid cards". The folder,
