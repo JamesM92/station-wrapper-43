@@ -151,6 +151,31 @@ class MergedClipsTest(unittest.TestCase):
         self.assertNotEqual(a, row(gc.ROTATE))                                 # the next clip's name is up a few seconds later
         self.assertEqual(a, row(g._rotors[0]["period"]))                       # and it comes round
 
+    def test_the_clip_on_air_is_marked_and_comes_first_in_the_rotation(self):
+        items = [{"title": f"Clip {n}", "at": n * 2, "len": 2} for n in range(8)]
+        g = self.guide(items)
+        now_at = NOW + timedelta(minutes=0)                                  # the window starts at NOW's half hour: clip 0 is on air
+        g.now = lambda: NOW + timedelta(minutes=5)                           # 5 minutes in: the third clip (4-6 min) is on air
+        g.frame(0)
+        names = g._rotors[0]["names"]
+        self.assertEqual(len(names), 8)
+        self.assertEqual(g._rotors[0]["starts"][0], 0.0)
+        # the first name of the round is the one on air: it is drawn with the marker, the others without
+        first = g._rotors[0]["names"][0]["strip"]
+        second = g._rotors[0]["names"][1]["strip"]
+        self.assertNotEqual(first.tobytes(), second.tobytes())
+        cells = g._cells([dict(i, start=NOW.replace(minute=0) + timedelta(minutes=i["at"]), end=NOW.replace(minute=0) + timedelta(minutes=i["at"] + i["len"])) for i in items],
+                         NOW.replace(minute=0), NOW.replace(minute=0) + timedelta(hours=2), 220, 0.06, NOW.replace(minute=0) + timedelta(minutes=5))
+        self.assertEqual(cells[0]["on_air"], 2)
+
+    def test_no_clip_on_air_marks_none(self):
+        g = self.guide([])
+        t0 = NOW.replace(minute=0, second=0, microsecond=0)
+        items = [{"title": f"Clip {n}", "start": t0 + timedelta(minutes=40 + n * 2), "end": t0 + timedelta(minutes=42 + n * 2)} for n in range(4)]
+        cells = g._cells(items, t0, t0 + timedelta(hours=2), 220, 0.06, t0 + timedelta(minutes=5))
+        self.assertEqual(len(cells), 1)
+        self.assertIsNone(cells[0]["on_air"])
+
     def test_a_lone_narrow_clip_and_wide_ones_are_left_alone(self):
         g = self.guide([{"title": "A", "at": 0, "len": 30}, {"title": "B", "at": 30, "len": 2}, {"title": "C", "at": 32, "len": 28}])
         g.frame(0)

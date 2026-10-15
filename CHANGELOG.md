@@ -59,7 +59,8 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
   lists as before.
 - **The channel guide merges clips too small to read.** A run of programmes that are each too narrow to show a name (a feed of short
   clips) is drawn as one cell over the whole run, which names its clips in turn (a long name moves along the cell while it is up)
-  and says how many clips it holds and the time it covers.
+  and says how many clips it holds and the time it covers. While one of them is on air its name is marked with ▶ and comes
+  first each round.
 - **Premiere nights.** Mark one block of a show's slot (on the Videos tab: select it and tick *New episodes premiere in this slot*,
   say Friday's 8 pm) and choose where the show's new episodes start (a season, a folder or an episode). Each time that slot comes
   round it plays the next new episode; the show's other airings play the older episodes in order and loop, now including the ones

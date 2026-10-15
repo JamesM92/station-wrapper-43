@@ -331,7 +331,7 @@ class Guide:
             d.text((int(W * 0.012), y + int(self.row_h * 0.08)), r["number"] or "", font=self.f_num, fill=th["text"])
             d.text((int(W * 0.012), y + int(self.row_h * 0.58)), _clip(d, r["name"], self.f_name, self.label_w - int(W * 0.02)),
                    font=self.f_name, fill=th["dim"])
-            for it in self._cells(r["items"], t0, t1, grid_x, pps):
+            for it in self._cells(r["items"], t0, t1, grid_x, pps, now):
                 a, b = max(it["start"], t0), min(it["end"], t1)
                 x0, x1 = grid_x + int((a - t0).total_seconds() * pps), grid_x + int((b - t0).total_seconds() * pps)
                 if x1 - x0 < 6:
@@ -386,7 +386,7 @@ class Guide:
             self._lap = STILL_CYCLE / LAPS
         self._rows = len(rows)
 
-    def _cells(self, items, t0, t1, grid_x, pps):
+    def _cells(self, items, t0, t1, grid_x, pps, now=None):
         """The cells of a row. A run of two or more programmes that are each too narrow to read (a feed of short clips) becomes
         ONE cell over the whole run, which names its clips in turn; anything else is a cell of its own."""
         need = self.row_h * READABLE
@@ -398,12 +398,14 @@ class Guide:
 
         def flush():
             if len(run) >= 2:
-                names = []
+                names, on = [], None
                 for it in run:
                     if not names or names[-1] != it["title"]:
                         names.append(it["title"])
+                    if now is not None and it["start"] <= now < it["end"]:
+                        on = len(names) - 1                      # the name of the clip on air now
                 cells.append({"title": names[0], "sub": "", "start": run[0]["start"], "end": run[-1]["end"],
-                              "names": names, "clips": len(run)})
+                              "names": names, "clips": len(run), "on_air": on})
             else:
                 cells.extend(run)
             run.clear()
@@ -433,6 +435,9 @@ class Guide:
         name too long for the cell moves along it while it is up), and under them the time it covers and how many clips."""
         th = self.theme
         names = ["◂ " + n if it["start"] < t0 and i == 0 else n for i, n in enumerate(it["names"])]
+        on = it.get("on_air")
+        if on is not None:                                    # the clip on air goes first each round, marked
+            names = [("▶ " + names[on])] + names[on + 1:] + names[:on]
         h = int(self.f_cell.size * 1.45) if hasattr(self.f_cell, "size") else int(self.row_h * 0.4)
         shown, starts, at = [], [], 0.0
         for n in names:
