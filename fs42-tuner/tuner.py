@@ -499,6 +499,7 @@ class Channel:
     _warm_timer = None
     _last_chunk_at = None                     # when the last bytes were sent into the channel (to measure the gap at a join)
     _prev_kind = None                         # what kind of piece that was (commercial, bump, feature)
+    _last_played = None                       # (path, skip) of the piece that just finished, to spot its tail in the schedule
     _join_meta = None                         # what the piece about to play is, for the join report
 
     @property
@@ -715,6 +716,20 @@ class Channel:
             self._pipe(filler_cmd(15, "QUEUEING"))              # the next part of the schedule is not there yet
             return
 
+        shift = 0.0
+        last, self._last_played = self._last_played, None
+        if last is not None and cur.remaining < 1.5 and (cur.entry.path, cur.entry.skip) == last:
+            # What is left of the entry we have just played is a moment: a piece is delivered a little ahead of its clock, so it
+            # ends a little before its schedule does. Playing that tail as a piece of its own would repeat it and cost a whole
+            # start-up for a fraction of a second (and throw away the next piece, if it is already started and waiting): go
+            # straight to the next entry instead.
+            shift = max(cur.remaining, 0.0) + 0.05
+            try:
+                cur = resolver.resolve(DB_PATH, self.station, datetime.now() + timedelta(seconds=shift))
+            except ScheduleGap:
+                self.stop.wait(shift)
+                return
+
         entry = cur.entry
         path = entry.path if entry.is_stream else media_path(entry.path)
         name = os.path.basename(entry.path)
@@ -736,13 +751,6 @@ class Channel:
             self._shutdown(why="nobody watching: the queued break has run")
             return
 
-        waiting = self._warm
-        if cur.remaining < 1.5 and waiting is not None and (waiting["path"], waiting["skip"]) != (path, entry.skip):
-            # What is left of this piece is a moment, and the piece after it is already started and waiting (a piece started
-            # early finishes a little before its time). Starting this one again would cost more than the moment is worth and
-            # would throw the waiting piece away: wait the moment out and go straight on to it.
-            self.stop.wait(max(cur.remaining, 0.0))
-            return
         self.now_playing = cur.block_title
         warm = self._take_warm(path, cur)                       # this very piece, started a few seconds early, or None
         if warm is not None:
@@ -759,7 +767,7 @@ class Channel:
             subs = caption_filter(self.station, entry, path, local, cur.seek)
             inject = caption_injector(self.station, entry, path, cur.seek)
             began = time.time()
-            self._join_meta = {"to": entry.content_type, "file": name, "due": time.time() - cur.offset,
+            self._join_meta = {"to": entry.content_type, "file": name, "due": time.time() + shift - cur.offset,
                                "flags": [f for f, on in (("warm", warm is not None), ("read-ahead", bool(stream_url)),
                                                          ("copy", bool(pinned))) if on]}
             self._arm_warm(entry, cur, began)                    # and the one after it, a few seconds before this one ends
@@ -780,6 +788,8 @@ class Channel:
                                   label=name, cached=pinned, inject=inject)
             self.clock += cur.remaining
             self._prev_kind = entry.content_type
+            if sent >= 1024 and not entry.is_stream:
+                self._last_played = (entry.path, entry.skip)
             if sent < 1024 and not entry.is_stream and not self.stop.is_set() and not self.reload.is_set():
                 # ffmpeg gave nothing for a file that is there: it can't be read. Say so, and don't spin on it.
                 print(f"[ch{self.number}] bad file (nothing came out of it): {path}", flush=True)

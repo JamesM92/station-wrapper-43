@@ -87,6 +87,11 @@ Work towards 0.8.0. The upgrade notes come first.
   shows *passing on*; a guide-only tuner has no tiles.
 
 ### Fixed
+- **A moment left at the end of a piece is no longer played again as a piece of its own.** A piece is delivered slightly ahead of its
+  clock, so it ends a little before its schedule does; the channel then found the last fraction of a second of the same entry still
+  due and started a whole new encode for it (repeating that tail, costing another start-up, and throwing away the next piece when it
+  was already started and waiting). It now goes straight on to the next entry. Found by measuring the joins on a demo channel: the
+  Joins card had shown "60 s" and "182 s late" for these tails.
 - **Every finding of GitHub's code scanning is fixed in the code** (117, none dismissed), and no `# nosec` is left in our code: paths
   are joined and checked to stay inside their folder in a form the scanner follows; the login page's "go back to" address must stay on
   this server; caption text is cleaned until no tag is left; ffmpeg and ffprobe run from literal lists; every address the tuner, the
