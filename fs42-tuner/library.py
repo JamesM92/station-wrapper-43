@@ -215,12 +215,6 @@ def refresh_tag(root, tag):
     return th
 
 
-def expire():
-    """Mark the cached scan out of date but keep it to show until the new one is ready."""
-    with _lock:
-        _cache["at"] = 0.0
-
-
 def forget():
     """Drop the cached scan (tests, and a way to force a fresh look)."""
     with _lock:

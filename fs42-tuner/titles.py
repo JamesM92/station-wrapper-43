@@ -90,12 +90,6 @@ def details_from_nfo(text):
     return out
 
 
-def title_from_nfo(text):
-    """The one name for a video (the show's name, with the episode's after it when that is switched on), or None."""
-    title, episode = parts_from_nfo(text)
-    return f"{title}: {episode}"[:200] if title and episode and EPISODE_NAMES else title
-
-
 def parts_for(video_path):
     """(title, episode name) for this video from its .nfo, or (None, None) to keep its file name."""
     if os.path.splitext(video_path)[1].lower() not in VIDEO_EXT:
