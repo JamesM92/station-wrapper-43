@@ -3,6 +3,7 @@
 Run: python3 test_warmstart.py (needs ffmpeg)
 """
 import json
+import importlib
 import os
 import shutil
 import subprocess
@@ -17,7 +18,7 @@ os.environ.setdefault("FS42_TUNER_CONF", os.path.join(tempfile.mkdtemp(), "c.jso
 json.dump({"db_path": "none.db", "catalog_root": tempfile.mkdtemp(), "channels": {}, "media_root": "/tmp", "port": 5098,
            "advertise_url": "http://127.0.0.1:5098"}, open(os.environ["FS42_TUNER_CONF"], "w"))
 sys.argv = ["tuner.py"]
-import tuner  # noqa: E402
+tuner = importlib.import_module("tuner")
 
 CLIP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "test-pattern.mp4")
 

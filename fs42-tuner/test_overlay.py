@@ -1,4 +1,5 @@
 """The words in the bottom right corner that say why a test pattern is on screen. Run: python3 test_overlay.py (needs ffmpeg)"""
+import importlib
 import os
 import shutil
 import subprocess
@@ -12,7 +13,7 @@ import json
 json.dump({"db_path": "none.db", "catalog_root": tempfile.mkdtemp(), "channels": {}, "media_root": "/tmp", "port": 5099,
            "advertise_url": "http://127.0.0.1:5099"}, open(os.environ["FS42_TUNER_CONF"], "w"))
 sys.argv = ["tuner.py"]
-import tuner  # noqa: E402
+tuner = importlib.import_module("tuner")
 
 
 class OverlayTest(unittest.TestCase):

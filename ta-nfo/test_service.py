@@ -3,6 +3,7 @@
 Run: python3 test_service.py
 """
 import json
+import importlib
 import os
 import shutil
 import signal
@@ -14,7 +15,7 @@ import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "fs42-tuner"))
-import settings  # noqa: E402
+settings = importlib.import_module("settings")
 
 STUB = '''import os, sys
 log = os.environ["STUB_LOG"]

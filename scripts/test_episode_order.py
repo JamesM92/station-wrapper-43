@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "fs42-tuner"))
 spec = importlib.util.spec_from_file_location("console_launch", os.path.join(HERE, "..", "fieldstation42", "console_launch.py"))
 cl = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cl)
-import ordering  # noqa: E402
+ordering = importlib.import_module("ordering")
 
 try:
     from fs42.sequence import NamedSequence
