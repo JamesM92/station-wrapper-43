@@ -83,7 +83,7 @@ MIN_MOVING = 36                     # pixels: a cell narrower than this shows th
 MIN_LAP = 8.0                       # seconds: no name goes round faster than this to be read, however quick the vertical scroll
 STILL_CYCLE = 40.0                  # seconds one round is taken to last when the guide is not scrolling up (it all fits)
 SPEEDS = {"slow": 0.6, "normal": 1.0, "fast": 1.8}
-READABLE = 1.4                      # a cell narrower than this many row heights can't be read: a run of them is merged into one
+READABLE = 0.7                      # a cell narrower than this many row heights can't be read (about 8 minutes at the usual 3 hours across): a run of them is merged into one
 ROTATE = 3.0                        # seconds each clip's name of a merged cell is shown before the next
 
 
@@ -410,7 +410,7 @@ class Guide:
                 cells.extend(run)
             run.clear()
         for it in items:
-            if 6 <= width(it) < need:
+            if 0 < width(it) < need:                              # (a sliver of a pixel or two joins the run: it could never be drawn alone)
                 run.append(it)
             else:
                 flush()

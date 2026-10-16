@@ -64,8 +64,8 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
   lists. They are drawn in the background on save and again on a rename, and a failure only shows a note on the station: it plays its
   lists as before. The cards can be drawn in any of the guide's looks (Modern blue, Midnight, Classic cable, Emerald, Sunset), chosen
   beside the option, so a channel's cards and its guide can match; changing it draws them again.
-- **The channel guide merges clips too small to read.** A run of programmes that are each too narrow to show a name (a feed of short
-  clips) is drawn as one cell over the whole run, which names its clips in turn (a long name moves along the cell while it is up)
+- **The channel guide merges clips too small to read.** A run of programmes that are each too narrow to show a name (under about 8 minutes at the usual three hours across, down to slivers of
+  a second; a 15 minute programme keeps its own cell) is drawn as one cell over the whole run, which names its clips in turn (a long name moves along the cell while it is up)
   and says how many clips it holds and the time it covers. While one of them is on air its name is marked with ▶ and comes
   first each round.
 - **Premiere nights.** Mark one block of a show's slot (on the Videos tab: select it and tick *New episodes premiere in this slot*,

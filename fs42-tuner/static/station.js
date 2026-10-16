@@ -506,10 +506,10 @@
     const anyOn = reach ? reach.premiere.length > 0 : b.premiere === true;
     if (!anyOn) return;
     const cfg = (state.schedule.premieres || {})[show] || { from: "" };
-    holder.append(el("span", { className: "dim", textContent: "Each premiere night plays the next new episode; with no new episode left, it plays the loop too." }));
+    holder.append(el("div", { className: "dim", textContent: "Each premiere night plays the next new episode; with no new episode left, it plays the loop too." }));
     const pick = el("select", { ariaLabel: "Where the new episodes start" });
     pick.append(el("option", { value: "", textContent: "Choose where the new episodes start…" }));
-    holder.append(el("span", { className: "dim", textContent: "The new episodes start at:" }), pick);
+    holder.append(el("div", { className: "dim", textContent: "The new episodes start at:" }), pick);
     call(`/api/stations/show-episodes?list=${encodeURIComponent(show)}`).then((d) => {
       const group = (label_, items, text) => {
         if (!items.length) return;

@@ -176,6 +176,21 @@ class MergedClipsTest(unittest.TestCase):
         self.assertEqual(len(cells), 1)
         self.assertIsNone(cells[0]["on_air"])
 
+    def test_ordinary_short_programmes_are_not_merged_but_slivers_join_a_run(self):
+        # 15 minute programmes (about 87 pixels across) are readable: each keeps its own cell
+        g = self.guide([{"title": f"Show {n}", "at": n * 15, "len": 15} for n in range(6)])
+        g.frame(0)
+        self.assertEqual(g._rotors, [])
+        # a run of 5 minute clips with a few seconds long ones among them is ONE cell
+        items, at = [], 0
+        for n in range(20):
+            length = 0.05 if n % 4 == 3 else 5
+            items.append({"title": f"Clip {n}", "at": at, "len": length})
+            at += length
+        g = self.guide(items)
+        g.frame(0)
+        self.assertEqual(len(g._rotors), 1)
+
     def test_a_lone_narrow_clip_and_wide_ones_are_left_alone(self):
         g = self.guide([{"title": "A", "at": 0, "len": 30}, {"title": "B", "at": 30, "len": 2}, {"title": "C", "at": 32, "len": 28}])
         g.frame(0)

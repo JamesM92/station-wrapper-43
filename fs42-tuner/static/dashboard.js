@@ -115,12 +115,13 @@
     if (!s || !s.enabled) return "";
     const files = s.files || [];
     const short = files.filter((f) => f.short_mb > 0);
-    const detail = files.slice(0, 4).map((f) => {
-      const note = f.streams_live ? "streams live" : `${f.have_mb} of ${f.wanted_mb} MB held`;
-      return `${esc(f.file)}: ${f.state}, ${note}` + (f.short_mb > 0 ? `, short by ${f.short_mb} MB` : "");
-    }).join("; ");
-    return card("Big files", files.length ? `${s.ram_mb} MB RAM + ${s.disk_mb} MB disk` : "nothing playing",
-                files.length ? detail : `files of ${s.min_mb} MB or more on a share are read ahead`, short.length > 0);
+    const playing = files.filter((f) => f.state === "playing").length, preparing = files.filter((f) => f.state === "preparing").length;
+    const live = files.filter((f) => f.streams_live).length;
+    const bits = [playing ? `${playing} playing` : "", preparing ? `${preparing} preparing` : "",
+                  files.length ? (live === files.length ? "all stream live" : `${files.length - live} held ahead`) : "",
+                  short.length ? `short by ${short.reduce((n, f) => n + f.short_mb, 0)} MB` : ""].filter(Boolean);
+    return card("Big files", files.length ? `${s.ram_mb} MB RAM, ${s.disk_mb} MB disk` : "none open",
+                files.length ? bits.join(" · ") : `files of ${s.min_mb} MB or more on a share are read ahead`, short.length > 0);
   }
 
   function renderChannels(rows) {
