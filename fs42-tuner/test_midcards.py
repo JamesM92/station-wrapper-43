@@ -5,7 +5,6 @@ Run: python3 test_midcards.py
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import unittest
 

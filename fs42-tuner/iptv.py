@@ -14,7 +14,6 @@ Two ways to play a channel:
     convert     re-encode to what a web browser plays (H.264 and AAC, the same as every other channel)
     relay       copy the stream as it is, with no re-encode: cheap, but a browser may not be able to play it
 """
-import hashlib
 import json
 import os
 import re

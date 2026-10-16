@@ -9,7 +9,7 @@ import sqlite3
 import tempfile
 import time
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from test_files_api import Server, touch
 from test_stations_http import FakeConsoleServer

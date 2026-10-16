@@ -1,5 +1,4 @@
 """Even out the volume (loudness.py). Run: python3 test_loudness.py (the real-ffmpeg test needs ffmpeg)"""
-import json
 import os
 import shutil
 import subprocess

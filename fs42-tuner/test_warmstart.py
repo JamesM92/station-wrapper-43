@@ -11,7 +11,6 @@ import sys
 import tempfile
 import time
 import unittest
-from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 os.environ.setdefault("FS42_TUNER_CONF", os.path.join(tempfile.mkdtemp(), "c.json"))

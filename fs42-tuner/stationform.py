@@ -21,7 +21,6 @@ why, and the page shows it read-only with a pointer to the FieldStation42 consol
 import guide_channel
 import midcards
 import os
-import re
 import copy
 import json
 import schedules

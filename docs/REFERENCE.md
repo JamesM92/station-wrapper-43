@@ -143,6 +143,11 @@ Almost nothing needs setting: the defaults work, and what you would change is in
 | Keep schedules going: on/off, days ahead | on, 7 | Tops every station that has a schedule up to that many days | dashboard (Stations page); `SCHEDULE_KEEPER=0`, `KEEPER_DAYS_AHEAD` are only starting values |
 | `KEEPER_INTERVAL_MINUTES` | `30` | How often the keeper checks (it also checks again within a minute while catching up) | variable |
 | `LIBRARY_SCAN_MINUTES` | `60` | How often the lists are scanned for the video counts (a scan is also done a minute after start-up, and when you press Rescan) | variable |
+| `FOLLOW_INTERVAL_MINUTES`, `FOLLOW_FIRST_DELAY_SECONDS`, `LIBRARY_FIRST_DELAY_SECONDS` | `30`, `120`, `60` | How often followed folders are checked, and how long after start-up the first folder check and the first library scan wait | variable |
+| `CAPTION_TRACK` | `1` | `0` leaves the CEA-608 caption track out of every channel's stream | variable |
+| `CONTINUOUS_TS` | off | `1` makes timestamps carry straight on across pieces (one continuous stream); also a switch in the Playback panel on the dashboard | dashboard (Playback); variable is the starting value |
+| `SLOW_START_SECONDS` | `2` | A piece that takes longer than this to put out its first picture is logged as slow | variable |
+| `PREFETCH_STATS` | `/config/prefetch-stats.json` | Where the read-ahead remembers how fast each share is | variable |
 | `FARM_ENABLED` | `1` | `0` stops the job that fills `catalog/by-genre` with genre and channel lists | variable |
 | `FARM_INTERVAL_MINUTES` | `30` | How often that job runs (it also runs right after each TubeArchivist conversion) | variable |
 | `FIRSTRUN_TEST_STATION` | `1` | `0` stops the test station being made on a brand new install | variable |

@@ -4,7 +4,6 @@ Run: python3 test_console_update.py
 """
 import os
 import shutil
-import stat
 import tempfile
 import unittest
 

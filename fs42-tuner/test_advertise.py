@@ -1,7 +1,6 @@
 """The address the tuner tells clients to use (the address the client itself used, unless advertise_url was set).
 Run: python3 test_advertise.py"""
 import json
-import os
 import shutil
 import tempfile
 import unittest

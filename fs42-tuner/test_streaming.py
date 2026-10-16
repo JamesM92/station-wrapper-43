@@ -6,7 +6,6 @@ import hashlib
 import os
 import shutil
 import tempfile
-import threading
 import time
 import unittest
 import urllib.request
