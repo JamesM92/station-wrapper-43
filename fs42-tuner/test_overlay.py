@@ -14,6 +14,7 @@ json.dump({"db_path": "none.db", "catalog_root": tempfile.mkdtemp(), "channels":
            "advertise_url": "http://127.0.0.1:5099"}, open(os.environ["FS42_TUNER_CONF"], "w"))
 sys.argv = ["tuner.py"]
 tuner = importlib.import_module("tuner")
+ffcmd = importlib.import_module("ffcmd")
 
 
 class OverlayTest(unittest.TestCase):
@@ -25,7 +26,7 @@ class OverlayTest(unittest.TestCase):
         self.assertEqual(tuner.filler_cmd(5)[tuner.filler_cmd(5).index("-vf") + 1].count("drawtext"), 0)
 
     def test_nothing_in_the_name_can_break_the_filter(self):
-        vf = tuner.with_text(["ffmpeg", "-vf", "scale=1:1"], "it's 100%: a\\b;c,d")[2]
+        vf = ffcmd.with_text(["ffmpeg", "-vf", "scale=1:1"], "it's 100%: a\\b;c,d")[2]
         self.assertEqual(vf.count("drawtext"), 1)
         self.assertNotIn("\\b", vf.split("text=")[1].split(":font")[0].replace("\\\\", ""))
 

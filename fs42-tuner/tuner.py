@@ -67,7 +67,10 @@ from xml.sax.saxutils import escape
 import auth as authmod
 import webget
 import captions
-import ccinject
+import ffcmd
+import playopts
+from ffcmd import CONT_ENV, continuous_ts, segment_cmd, filler_cmd, still_cmd
+from playopts import audio_level_filter, burn_language, caption_injector, caption_feed, caption_filter
 import loudness
 import console_client
 import files as filemgr
@@ -211,26 +214,8 @@ PT_DIRECT_ASKED = PT_CONF.get("mode") == "direct"
 UPSTREAM  = Upstream(PT_URL) if PT_URL else None
 
 V = CONF.get("video", {})
-FPS = int(V.get("fps", 30))
-W, H = int(V.get("width", 1280)), int(V.get("height", 720))
-GOP = FPS * 2                       # keyframe every 2s -- also the join latency
-NORMALIZE = [
-    "-c:v", V.get("vcodec", "libx264"),
-    "-preset", V.get("preset", "veryfast"),
-    "-b:v", V.get("vbitrate", "4000k"),
-    "-maxrate", V.get("vbitrate", "4000k"),
-    "-bufsize", V.get("bufsize", "8000k"),
-    "-vf", f"scale={W}:{H}:force_original_aspect_ratio=decrease,"
-           f"pad={W}:{H}:-1:-1:color=black,fps={FPS},format=yuv420p",
-    "-g", str(GOP), "-keyint_min", str(GOP), "-sc_threshold", "0",
-    "-c:a", "aac", "-b:a", V.get("abitrate", "192k"), "-ar", "48000", "-ac", "2",
-]
-MUX = [
-    "-f", "mpegts",
-    "-mpegts_flags", "+resend_headers+initial_discontinuity",
-    "-mpegts_service_id", "1", "-mpegts_pmt_start_pid", "4096", "-mpegts_start_pid", "256",
-    "-muxdelay", "0", "-muxpreload", "0", "-flush_packets", "1",
-]
+ffcmd.configure(V)
+FPS, W, H, GOP, NORMALIZE, MUX = ffcmd.FPS, ffcmd.W, ffcmd.H, ffcmd.GOP, ffcmd.NORMALIZE, ffcmd.MUX
 
 CHUNK = 188 * 64                    # whole TS packets
 PRIME_SECONDS = 3                   # rolling buffer handed to a late joiner
@@ -260,204 +245,8 @@ def media_path(rel):
     return rel if os.path.isabs(rel) else os.path.join(CATALOG_ROOT, rel)
 
 
-_CONT_ENV = os.environ.get("CONTINUOUS_TS", "").strip().lower()
-
-
-def continuous_ts():
-    """Do timestamps carry straight on across pieces (one continuous stream)? The CONTINUOUS_TS environment variable decides
-    when it is set; else the dashboard's switch (settings.json), off unless turned on. Read at each piece, so a change is used
-    from the next one."""
-    if _CONT_ENV:
-        return _CONT_ENV in ("1", "true", "yes", "on")
-    try:
-        return settings.get_playback()["continuous_ts"]
-    except Exception:
-        return False
-
-
-def _continuous(mux):
-    """The mux options without the flag that marks each new ffmpeg as a break in the stream."""
-    return [("+resend_headers" if m == "+resend_headers+initial_discontinuity" else m) for m in mux]
-
-
-def segment_cmd(path, seek, duration, is_stream, ts_offset=None, text=None, subs=None, ordered=False, audio=None, lead=0.0):
-    """ffmpeg for one plan entry. -ss before -i so the seek is fast, -t bounds
-    it to the scheduled duration so a file that runs long can't push the
-    channel off its own clock. -re paces output at realtime: without it ffmpeg
-    would encode a 20-minute segment as fast as the CPU allows and the fanout
-    would race ahead of the wall clock it is supposed to track.
-
-    `lead` (a warm start, see WARM_LEAD): it is started that many seconds before it is due, reading from `lead` seconds
-    earlier in the file, and the first `lead` seconds of what comes out are dropped before they are encoded. The file is
-    opened and seeked during that time, and the picture the viewer gets starts at `seek`, on time."""
-    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-re"]
-    if is_stream:
-        cmd += ["-i", path]
-    elif lead > 0:
-        cmd += ["-ss", f"{max(seek - lead, 0):.3f}", "-i", path, "-ss", f"{lead:.3f}", "-t", f"{duration:.3f}"]
-    else:
-        cmd += ["-ss", f"{seek:.3f}", "-i", path, "-t", f"{duration:.3f}"]
-    enc = with_subtitles(NORMALIZE, subs)
-    if audio:                                    # the volume brought to the target: one fixed gain, then a limiter
-        enc = enc + ["-af", audio]
-    if ordered:                                  # captions are put in frame by frame: the frames must be in the order they are shown
-        enc = enc + ["-bf", "0"]
-    if ts_offset is not None:                    # timestamps carry on from the last segment: one continuous stream
-        return with_text(cmd + enc + ["-output_ts_offset", f"{ts_offset:.3f}"] + _continuous(MUX) + ["pipe:1"], text)
-    return with_text(cmd + enc + MUX + ["pipe:1"], text)
-
-
-def with_subtitles(enc, subs):
-    """The encoder options with `subs` (a filter from captions.burn_filter) drawn on the picture, or unchanged."""
-    if not subs or "-vf" not in enc:
-        return enc
-    out = list(enc)
-    i = out.index("-vf")
-    out[i + 1] = f"{out[i + 1]},{subs}"
-    return out
-
-
-TEXT_FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}
 
-
-def _drawtext(text):
-    """An ffmpeg drawtext filter that puts `text` in the bottom right corner on a dark box."""
-    t = re.sub(r"[^\w .,:!?'()/#&+@-]", "", str(text))[:70]
-    t = t.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'").replace("%", "\\%")
-    font = f":fontfile={TEXT_FONT}" if os.path.isfile(TEXT_FONT) else ""
-    return (f"drawtext=text='{t}'{font}:fontcolor=white:fontsize=h/26:box=1:boxcolor=black@0.65:boxborderw=10:"
-            "x=w-tw-30:y=h-th-30")
-
-
-def with_text(cmd, text):
-    """The same ffmpeg command with `text` drawn in the bottom right of the picture (why a test pattern is on screen)."""
-    if not text or "-vf" not in cmd:
-        return cmd
-    out = list(cmd)
-    i = out.index("-vf")
-    out[i + 1] = f"{out[i + 1]},{_drawtext(text)}"
-    return out
-
-
-def filler_cmd(seconds, text=None):
-    return with_text(["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-re",
-                      "-f", "lavfi", "-i", f"smptebars=size={W}x{H}:rate={FPS}",
-                      "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000",
-                      "-t", f"{max(seconds, 1):.1f}"] + NORMALIZE + MUX + ["pipe:1"], text)
-
-
-def still_cmd(path, seconds, text=None):
-    """A picture held on screen (a be-right-back card) for `seconds`, with silence under it."""
-    return with_text(["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-re",
-                      "-loop", "1", "-framerate", str(FPS), "-i", path,
-                      "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
-                      "-t", f"{max(seconds, 1):.1f}"] + NORMALIZE + MUX + ["pipe:1"], text)
-
-
-_CAPTION_PREFS = {"at": 0.0, "track": {}, "level": {}}
-
-
-def level_audio(station):
-    """Is the volume of this station's videos evened out? On unless the station says no."""
-    caption_track(station)                                  # keeps the shared station-settings cache fresh
-    return _CAPTION_PREFS["level"].get(station, True)
-
-
-def audio_level_filter(station, entry, original):
-    """The audio filter that brings a video to the volume target, or None (switched off for the station, a live stream, or the
-    video is not measured yet: it is queued, and plays as it is this time)."""
-    if entry.is_stream or os.environ.get("LOUDNESS", "1").lower() in ("0", "false", "no", "off") or not level_audio(station):
-        return None
-    try:
-        return LEVELS.filter_for(original)
-    except Exception as e:                                  # an even volume is a nicety: never the reason a channel goes quiet
-        print(f"! volume of {os.path.basename(original)}: {e}", flush=True)
-        return None
-
-
-def caption_track(station):
-    """Does the station carry captions as a track in its stream? On unless the station says no."""
-    if time.time() - _CAPTION_PREFS["at"] > 5:
-        try:
-            confs = stations.station_confs(CONFS_DIR)
-        except OSError:
-            confs = {}
-        _CAPTION_PREFS["track"] = {n: c.get("wrapper_caption_track") is not False for n, c in confs.items()}
-        _CAPTION_PREFS["level"] = {n: c.get("wrapper_level_audio") is not False for n, c in confs.items()}
-        _CAPTION_PREFS["at"] = time.time()
-    return _CAPTION_PREFS["track"].get(station, True)
-
-
-def burn_language(station, seek):
-    """The language of the captions the station's calendar draws on the picture right now ("" for none): the video
-    block that covers the moment the programme started has the toggle on; the language is the one setting."""
-    try:
-        defn = schedules.get(station)
-        if not defn or not schedules.burn_at(defn, datetime.now() - timedelta(seconds=max(seek, 0))):
-            return ""
-        return settings.get_captions()["language"]
-    except Exception as e:                          # a calendar that can't be read must not take the channel off
-        print(f"! caption setting of {station}: {e}", flush=True)
-        return ""
-
-
-_CC_LINES = {}
-
-
-def caption_injector(station, entry, original, seek):
-    """A ccinject.Injector for a programme whose station carries captions as a track and whose video has them in the
-    language set on the Stations page, or None."""
-    if os.environ.get("CAPTION_TRACK", "1").lower() in ("0", "false", "no", "off"):      # switched off for the whole container
-        return None
-    if entry.is_stream or entry.content_type in ("bump", "commercial") or not caption_track(station):
-        return None
-    try:
-        lang = settings.get_captions()["language"]
-        track = captions.pick(original, lang)
-        if track is None:
-            return None
-        key = (original, track["id"], captions.version(original, track))
-        got = _CC_LINES.get(key)
-        if got is None:
-            text = captions.vtt(original, track["id"])
-            cues = ccinject.parse_vtt(text or "")
-            got = (ccinject.timeline(cues, FPS), cues)
-            if len(_CC_LINES) >= 8:
-                _CC_LINES.pop(next(iter(_CC_LINES)))
-            _CC_LINES[key] = got
-        line, cues = got
-        return ccinject.Injector(line, seek, FPS, resume=ccinject.active_at(cues, seek)) if line else None
-    except Exception as e:                       # captions are a nicety: never the reason a channel goes quiet
-        print(f"! caption track for {os.path.basename(original)}: {e}", flush=True)
-        return None
-
-
-def caption_feed(inject, chunk, number=0):
-    """Run a chunk of the stream through the caption injector, if there is one. Whatever goes wrong with the captions, the
-    picture goes on: the injector is dropped and the stream passes through untouched. Returns (chunk, injector or None)."""
-    if inject is None:
-        return chunk, None
-    try:
-        return inject.feed(chunk), inject
-    except Exception as e:
-        print(f"[ch{number}] captions switched off for this programme: {e}", flush=True)
-        return chunk, None
-
-
-def caption_filter(station, entry, original, local, seek):
-    """The subtitle filter for a programme in a block that burns captions in, or None (the block does not, the video
-    has none in that language, or it is a commercial or a card)."""
-    if entry.is_stream or entry.content_type in ("bump", "commercial"):
-        return None
-    lang = burn_language(station, seek)
-    if not lang:
-        return None
-    try:
-        return captions.burn_filter(captions.pick(original, lang), local, seek)
-    except Exception as e:                       # captions are a nicety: never the reason a channel goes quiet
-        print(f"! captions for {os.path.basename(original)}: {e}", flush=True)
-        return None
 
 
 class Subscriber:
@@ -1212,6 +1001,7 @@ def stream_open(path, seek):
 
 LEVELS = loudness.Levels(os.path.join(os.path.dirname(settings.PATH), "loudness.json"), LIBRARY_ROOT,
                          target_fn=lambda: settings.get_loudness()["target"])
+playopts.configure(CONFS_DIR, FPS, LEVELS)
 VIEWERS = threading.BoundedSemaphore(TUNER_COUNT)
 PT_BUDGET = None            # set at startup once the real device is queried
 
@@ -2141,7 +1931,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": str(e)}, 400)
             except OSError as e:
                 return self._json({"error": f"could not save the settings: {e.strerror}"}, 500)
-            return self._json({"settings": got, "env": bool(_CONT_ENV)})
+            return self._json({"settings": got, "env": bool(CONT_ENV)})
         if p == "/api/captions/settings":
             body = self._json_body()
             if body is None:
@@ -2407,7 +2197,7 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/api/captions":
             return self._json({"settings": settings.get_captions(), "edit": EDIT_FILES})
         if p == "/api/playback":
-            return self._json({"settings": settings.get_playback(), "env": bool(_CONT_ENV), "on": continuous_ts(), "edit": EDIT_FILES})
+            return self._json({"settings": settings.get_playback(), "env": bool(CONT_ENV), "on": continuous_ts(), "edit": EDIT_FILES})
 
         if p.startswith("/api/iptv/"):
             return self._iptv_api(p)
