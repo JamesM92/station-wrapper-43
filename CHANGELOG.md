@@ -5,110 +5,98 @@ Work in progress is kept under *Unreleased* and moves to a version heading when 
 
 ## [Unreleased]
 
-### Changed
-- **`PUID` / `PGID` are explained where a new user looks**: the README quick start, the QUICKSTART, `.env.example` and the end of
-  `setup-dirs.sh` (which says who the services will run as). The station form's note on a channel's drawn mid cards now updates itself
-  from "drawing" to "drawn" (or the reason it failed), and the Midnight look edges its letters in its orange.
-- **The services no longer run as root.** The container starts as root only to give `/config` and the catalog to `PUID`:`PGID` (unset: the owner of your config folder, else 1000:1000) and drops to that user before anything runs; the console, dashboard, sync and TubeArchivist jobs, `fs42-channels` and everything they write are that user's. The first start gives what an earlier run as root left in those two folders to that user, once. Start the container with `user:` to never be root at all. `PUID=0` keeps root. With `cap_drop: ALL`, add back `CHOWN`, `SETUID`, `SETGID`.
-- **The services' signal files are in a private folder** (`/run/fs42`, 0700) instead of fixed names in `/tmp`.
-- **The dashboard's pictures are cheaper and say why.** A channel nobody is watching shows **idle** and no video is opened for it
-  (a snapshot reads the video, which on a network share is real work); once somebody watches it, its picture refreshes every
-  20 seconds. The TV guide channel shows its own guide, drawn here and refreshed every 10 seconds, without an encoder running.
-  A channel that is off air, has nothing scheduled, has a file that is gone, or fell back to the test pattern shows the test
-  pattern with its reason in the corner (*NO PROGRAMMING*, *NO FILE: name*, *BAD FILE*, *NO VIDEOS IN: list*...).
-- **A channel keeps running for a while after the last viewer leaves, and the dashboard's pictures follow it.** A tile shows
-  *idle* only when its encoder is not running, and its picture is taken from the few seconds of output the channel already keeps,
-  so no file is opened for it. A source converted here stays up for 5 minutes after the last viewer (`external_linger_seconds`).
-  A station of ours finishes what is queued (the programme and the next whole commercial break with its mid cards) and stops at
-  the start of the break after that, or after 15 minutes (`IDLE_TAIL_MINUTES`, `0` for the old 10 seconds), whichever is first.
-  Nothing new is read ahead for nobody, and a viewer who comes back cancels the wind-down. When every encoder is busy and somebody
-  tunes to another channel, the channel that has been idle the longest gives up its encoder at once; a channel with viewers is
-  never taken from, and neither is the TV guide channel.
-- **An external source's channels on the dashboard follow how they are played.** A converted one is treated like a station of our own:
-  *idle* until somebody watches it, then a picture that refreshes every 20 seconds like a station's (taken from the few seconds of its own output this container already keeps, so the source is not asked again). One passed on as it is says *passing on*, since nothing here watches it. A
-  guide-only tuner has no channels of ours, so it has no tiles.
-- **No flicker when the dashboard updates.** A picture stays on screen until its replacement has loaded (the guide channel's
-  picture used to blank for a moment each time it was drawn again).
-- **The dashboard is lighter.** The Library section (the lists, tag by tag) is gone from the dashboard. The counts, the dead-link and
-  duplicate warnings (beside the list they are in) and the **Rescan** button are on the Lists & files page, above the lists.
+Work towards 0.8.0. The upgrade notes come first.
+
+### Upgrade notes
+- **The services no longer run as root.** The container starts as root only to give `/config` and the catalog to `PUID`:`PGID` and
+  then drops to that user. Unset, they are the owner of your config folder (so run `setup-dirs.sh` as the account that should own your
+  files), else 1000:1000. The first start after upgrading gives whatever a root run left in those two folders (the schedule
+  database, the TubeArchivist view) to that user, once; the log says so. The account must be able to read your media: on a NAS share
+  that restricts who can, set `PUID` and `PGID` to an account that can. `PUID=0` keeps root (not recommended), and starting the
+  container with `user:` in compose never uses root at all.
+- **Episodes of a show now play in natural order** (`Episode 2` before `Episode 10`), where FieldStation42 sorted by plain file
+  path. A show that is part way through keeps its place across the change.
+- **New hidden folders in your lists and catalog**, made and kept by the wrapper and safe to ignore: `.loop.<show>` and
+  `.new.<show>.<n>` (premiere nights), `.generated-cards` and `.cards.gen.<channel>` (drawn mid cards), and `catalog/.prefetch`
+  (the read-ahead server's disk tier, at most 30 GB).
+- **New settings** (all optional): `WARM_START_SECONDS`, `PREFETCH_STREAM`, `PREFETCH_DISK_GB`, `PREFETCH_DISK_DIR`; a *Playback* panel
+  on the Stations page for continuous timestamps. Compose files that name the variables pass blanks through safely.
 
 ### Added
-- **A switch for continuous timestamps.** The Stations page has a *Playback* panel with **Continuous timestamps (experimental)**, off
-  unless turned on (the `CONTINUOUS_TS` variable still decides when it is set). It is used from the next piece, so you can compare the
-  dashboard's *Joins* card with it off and on before it ever becomes the default.
-- **A preview of the premiere nights.** In the slot editor, under *The new episodes start at*, the next six premiere nights are listed with
-  the episode each airs (its title when the library has one, else its file) and a line saying how many new episodes are left and when the
-  last one airs, worked out from the schedule as it is being edited, by the same date logic that builds the config.
-- **A record of the joins between pieces.** The dashboard has a *Joins* card and a *Recent joins* table: for each cut between pieces,
-  how late its picture came against when the schedule had it due, whether it was warm-started or read ahead, and (as a median,
-  90th percentile and worst over the last hour) how the warm ones compare with the plain ones. A tune-in is counted apart, by its time to
-  the first picture. A join slower than a second is also written to the log. It is kept in memory (the last 200).
-- **Big files on a share are read through a read-ahead server.** A file of 256 MB or more on a network share is played through a
-  small server inside the container that holds a head start in the RAM disk (then a local disk folder, `catalog/.prefetch`, up to
-  `PREFETCH_DISK_GB`, 30 by default) and drops what has been played. How much it holds ahead is worked out from what the share is
-  doing now: `bytes still to play x (1 - share speed / the file's own rate)`, never under about a minute, so it starts at a few GB for
-  a long film on a slow share and falls to nothing by the end. A read waits for its bytes, so playing never gets ahead of what has
-  arrived; pulling ahead takes at most half of the share's measured speed; the join due soonest is served first, and the
-  dashboard's *Big files* card shows what each file has and is short by. `PREFETCH_STREAM=0` turns it off; any error plays the file
-  directly as before.
-- **Warm start.** Each piece of a channel is now started before it is due, so its picture comes out when it should instead of
-  after the file has been opened and the encoder has started. A part of a show that resumes after a break is started 4 seconds
-  early (`WARM_START_SECONDS`, 0 switches it off) so that the open and the seek happen while the commercials or cards are still
-  playing; a piece that starts at the beginning of its file (a commercial, a card) is started 0.8 seconds early, the time an
-  ffmpeg takes to put out its first picture. The log marks them *[warm start]*.
-- **Mid cards drawn for a channel.** On the station form, with *Default mid cards* on, *Also draw cards for this channel* adds two
-  cards made from the channel's name (2 seconds, 1280x720: *Station Wrapper 43* and the name in 3D letters, one rigid piece, that swing about 40 degrees back
-  and forth with a slight nod, with *We'll be right back* or *We're back with more* flat along the bottom) to the start and end lists. Each break picks
-  from your lists and these like any other card, and your lists are never changed (a list shared by several channels stays as it is):
-  the clips sit together in one hidden folder, and each channel's own hidden break folder links to its two clips and to your chosen
-  lists. They are drawn in the background on save and again on a rename, and a failure only shows a note on the station: it plays its
-  lists as before. The cards can be drawn in any of the guide's looks (Modern blue, Midnight, Classic cable, Emerald, Sunset), chosen
-  beside the option, so a channel's cards and its guide can match; changing it draws them again.
-- **The channel guide merges clips too small to read.** A run of programmes that are each too narrow to show a name (under about 8 minutes at the usual three hours across, down to slivers of
-  a second; a 15 minute programme keeps its own cell) is drawn as one cell over the whole run, which names its clips in turn (a long name moves along the cell while it is up)
-  and says how many clips it holds and the time it covers. While one of them is on air its name is marked with ▶ and comes
-  first each round.
-- **Premiere nights.** Mark one block of a show's slot (on the Videos tab: select it and tick *New episodes premiere in this slot*,
-  say Friday's 8 pm) and choose where the show's new episodes start (a season, a folder or an episode). Each time that slot comes
-  round it plays the next new episode; the show's other airings play the older episodes in order and loop, now including the ones
-  already premiered. When there is no new episode left the premiere night carries on with the loop, and with nothing premiered
-  yet the show simply plays from its first episode. It is worked out from the date, so a rebuilt schedule agrees with itself:
-  the config names a hidden folder per premiere (`.new.<show>.<n>`) and one for the loop (`.loop.<show>`), which the keeper
-  makes and adds to the catalog as the nights come into range.
-- **A slot can be on several days.** On the calendar's Videos tab, drag a slot sideways onto another day (a 15:00-16:00 slot
-  on Monday, dragged to Tuesday, is on both at 15:00-16:00), or draw across several days on empty space, and it is one slot: a
-  piece on each day at the same time, with the same lists, mid cards and captions. Change any of them, or resize it, once and every day
-  follows; *Remove this day* takes one out, *Delete all days* clears it, *Split into separate days* makes the pieces ordinary slots
-  again. The buttons *Weekdays*, *Weekend* and *All days* now link the slot to those days (they used to make separate copies).
-  For a premiere, the slot's editor lists its days and you tick the night(s) there, and choose where the new episodes start, once. Hold Alt while dragging to move a slot instead of putting it on the next day. It is a calendar convenience: each day is
-  still built on its own.
-- **Even volume.** Shows and commercials are brought to one loudness. Each video is measured once in the background (EBU R128) and a
-  fixed gain, with a limiter, is applied when it plays; a video not measured yet plays as it is. The target is set on the Stations
-  page (-23 LUFS by default), a station can switch it off, and `LOUDNESS=0` turns it off for the container.
-- **Channel logos on the dashboard.** Each channel's card shows its logo in the top left of its picture: a station's own (the one set
-  on the station, else one drawn from its name), and an external source's channel's, when its source or its guide has one.
+**Scheduling**
+- **A slot can be on several days.** Drag a slot sideways onto another day (a 15:00-16:00 slot on Monday, dragged to Tuesday, is on both
+  at 15:00-16:00), or draw across several days on empty space: it is one slot, a piece on each day at the same time with the same
+  lists, mid cards and captions. Change any of them, or resize it, once and every day follows. *Remove this day*, *Delete all days* and
+  *Split into separate days* undo it; Alt while dragging moves a slot instead. The buttons *Weekdays*, *Weekend* and *All days* now
+  link the slot to those days (they used to make separate copies).
+- **Premiere nights.** Tick *New episodes premiere on* the nights of a linked slot and choose where a show's new episodes start (a
+  season, a folder or an episode). Each premiere night plays the next new episode; every other airing of the show plays the older
+  episodes in order and loops, including the ones already premiered. With no new episode left the night carries on with the loop, and
+  with nothing premiered yet the show plays from its first episode. It is worked out from the date, so a rebuilt schedule agrees with
+  itself. The slot editor previews the next six nights with the episode each airs (its title when the library has one) and how many new
+  episodes are left.
+
+**Channels and cards**
+- **Mid cards drawn for a channel.** On the station form, with *Default mid cards* on, *Also draw cards for this channel* adds two cards
+  made from the channel's name (2 seconds, 1280x720: *Station Wrapper 43* and the name as 3D letters, one rigid piece that swings about
+  40 degrees with a slight nod, and *We'll be right back* or *We're back with more* along the bottom) to the start and end lists. Each
+  break picks from your lists and these like any other card; your lists are never changed, so a list shared by several channels stays
+  as it is. They are drawn in the background on save, on a rename and when the style changes, in any of the guide's looks (Modern blue,
+  Midnight, Classic cable, Emerald, Sunset); a failure only shows a note on the station, which then plays its lists as before.
+- **The channel guide merges clips too small to read.** A run of programmes each too narrow to show a name (under about 8 minutes
+  at the usual three hours across, down to slivers of a second; a 15 minute programme keeps its own cell) is one cell that names its
+  clips in turn, says how many it holds, and marks the one on air with ▶, first in each round.
+- **Even volume.** Shows and commercials are brought to one loudness. Each video is measured once in the background (EBU R128) and
+  a fixed gain with a limiter is applied when it plays. The target is set on the Stations page (-23 LUFS by default); a station can
+  switch it off, and `LOUDNESS=0` turns it off for the container.
+- **Channel logos on the dashboard**: a station's own (the one set on the station, else one drawn from its name) and an external
+  source's channel's, when its source or its guide has one.
+
+**Playback**
+- **Warm start.** Each piece of a channel is started before it is due, so its picture comes out on time instead of after the file has
+  been opened and the encoder started: a part of a show that resumes after a break 4 seconds early (`WARM_START_SECONDS`, 0 switches it
+  off), so its open and seek happen while the break is still playing; a commercial or a card 0.8 seconds early. The log marks them
+  *[warm start]*.
+- **Big files on a share are read through a read-ahead server.** A file of 256 MB or more on a network share is played through a small
+  local server that holds a head start in the RAM disk (then `catalog/.prefetch`) and drops what has been played. The head is
+  `bytes still to play x (1 - share speed / the file's own rate)`, never under about a minute: a few GB for a long film on a slow
+  share, falling to nothing by the end. A read waits for its bytes; pulling ahead takes at most half of the share's measured speed;
+  the join due soonest is served first. `PREFETCH_STREAM=0` turns it off, and any error plays the file directly as before.
+- **A record of the joins between pieces.** The dashboard's *Joins* card and *Recent joins* table show how late each piece's picture
+  came against the schedule, whether it was warm-started or read ahead, and a median, 90th percentile and worst over the last hour. A
+  tune-in is counted apart. A join slower than a second is written to the log.
+- **A switch for continuous timestamps** (*Playback* on the Stations page, off by default, used from the next piece) to compare in
+  the Joins card before it ever becomes the default; the `CONTINUOUS_TS` variable still decides when it is set.
+
+### Changed
+- **The signal files of the container's own services** are in a private folder (`/run/fs42`, 0700) instead of fixed names in `/tmp`.
+- **`PUID` / `PGID` are explained where a new user looks**: the README, the QUICKSTART, `.env.example` and the end of `setup-dirs.sh`.
+- **The dashboard is lighter and its pictures cheaper.** A channel nobody is watching shows *idle* and no video is opened for it; once
+  somebody watches it, its picture refreshes every 20 seconds, taken from the few seconds of output the channel already keeps. The
+  TV guide channel's tile is drawn here without an encoder. A channel that is off air, has a file that is gone or fell back to the
+  test pattern shows it with its reason in the corner (*NO PROGRAMMING*, *NO FILE: name*, *BAD FILE*, *NO VIDEOS IN: list*...).
+  A picture stays on screen until its replacement has loaded (no flicker). The Library section moved to the Lists & files page (the
+  counts, the warnings beside their list, and **Rescan**).
+- **A channel keeps running for a while after the last viewer leaves.** A station of ours finishes what is queued (the programme and the
+  next whole break with its mid cards) and stops at the start of the break after that, or after 15 minutes (`IDLE_TAIL_MINUTES`, `0`
+  for the old 10 seconds); a source converted here stays up for 5 minutes (`external_linger_seconds`). Nothing new is read ahead for
+  nobody, a returning viewer cancels the wind-down, and when every encoder is busy the channel idle the longest gives its encoder
+  to the one being tuned to (never one with viewers, never the TV guide channel).
+- **An external source's channels follow how they are played**: a converted one is treated like a station of ours (idle until
+  watched, then a picture from the output the container already keeps, so the source is not asked again); one passed on untouched
+  shows *passing on*; a guide-only tuner has no tiles.
 
 ### Fixed
-- **Episodes of a show play in natural order.** FieldStation42 orders a show by plain file path, so `Episode 10` played before `Episode 2`
-  and a `Season 10` folder before `Season 2`. Both of its sort steps now compare numbers as numbers (the same order the premiere nights
-  use), and a show that is part way through keeps its place across the change.
-- **Every finding of GitHub's code scanning is fixed in the code** (117, none dismissed). A page's file or list name is joined to its
-  folder and checked to stay inside it in one function per module, in a form the scanner follows; the login page's "go back to"
-  address is resolved against this server and used only if it stays on it; the caption text is cleaned until no tag is left; the
-  commands for ffmpeg and ffprobe are literal lists with the video or address as one argument; the redirect header can hold no
-  line break; and the captions route answers 404 to a path that is not one of its two shapes. A guide channel's music must now be a
-  folder or file *inside* the media, not the media folder itself.
-- **No `# nosec` is left in our code.** Every address the tuner, the sync service and the channel tools open now goes through one
-  opener that speaks http and https only (a `file:` or `ftp:` address, or a redirect to one, is refused); settings, schedules,
-  the follow list and the handover file are written `0644` (owned by the config folder's owner) instead of `0666`; the two
-  catalog queries have no built text; the signal files sit in the system temp folder rather than a fixed `/tmp` path; and the
-  dashboard's bind address can be narrowed with `FS42_BIND` (default every interface, as a container needs).
-- **GitHub Actions** are on checkout v7, setup-python v7 and codeql-action v4.
-- **An antenna tuner's logos in the guide.** A tuner added in converted or passed-on mode lost the logos that came with its listings;
-  they are now kept on the channel in `/xmltv.xml`, so Jellyfin shows them in those modes too (guide only already did).
-- **A link to a video that is gone no longer stops a catalog rebuild.** A list that held a link whose video had been moved or deleted
-  made the rebuild fail with `No such file or directory: .../star.mkv` after FieldStation42 had already deleted the station's
-  schedule. Such a link is now left out of the scan (the console log names it once) and the rebuild goes on with the rest.
+- **Every finding of GitHub's code scanning is fixed in the code** (117, none dismissed), and no `# nosec` is left in our code: paths
+  are joined and checked to stay inside their folder in a form the scanner follows; the login page's "go back to" address must stay on
+  this server; caption text is cleaned until no tag is left; ffmpeg and ffprobe run from literal lists; every address the tuner, the
+  sync service and the channel tools open goes through one opener that speaks http and https only; config files are written `0644`
+  instead of `0666`; the catalog queries have no built text; and the dashboard's bind address can be narrowed with `FS42_BIND`. A guide
+  channel's music must now be a folder or file *inside* the media. GitHub Actions are on checkout v7, setup-python v7 and codeql-action v4.
+- **An antenna tuner's logos** were lost in the guide in converted or passed-on mode; they are now kept on the channel in `/xmltv.xml`.
+- **A link to a video that is gone no longer stops a catalog rebuild.** It used to fail with `No such file or directory: .../star.mkv`
+  after FieldStation42 had already deleted the station's schedule. Such a link is now left out of the scan (the console log names it
+  once) and the rebuild goes on with the rest.
 
 ## [0.7.0] - 2026-10-11
 

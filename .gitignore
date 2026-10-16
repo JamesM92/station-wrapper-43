@@ -18,3 +18,4 @@ scripts/fetch-demo-media.py
 # the script that makes the README pictures: a local tool
 scripts/make-screenshots.py
 demo-media/
+scripts/measure-joins.py
