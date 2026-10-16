@@ -479,8 +479,11 @@ class Stations:
         if conf is None:
             raise NotFound(f"there is no station called '{name}'")
         form, why = self._form_of(name, conf, datetime.now().date())
+        cards = self.cards_status(name)
+        if not cards and conf.get("wrapper_gen_cards") is True and self.lists_dir and midcards.current(self.lists_dir, name, conf.get("wrapper_gen_style")):
+            cards = {"state": "ok", "message": "the channel's mid cards are drawn"}          # drawn earlier (this process does not remember)
         return {"name": name, "form": form, "why": why, "conf": {k: v for k, v in conf.items() if not k.startswith("_")},
-                "cards": self.cards_status(name)}
+                "cards": cards}
 
     # ---- changing
     def _check_music(self, form):

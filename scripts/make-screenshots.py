@@ -170,12 +170,15 @@ def main():
     for d in ("config", "catalog", "wrapper", "supervisor"):
         os.makedirs(os.path.join(root, d))
     for src in ("scripts/init.py", "scripts/build_channels.py", "scripts/fs42_link.py", "scripts/firstrun.py", "scripts/update_catalog.py",
-                "fs42-tuner/schedlock.py", "fieldstation42/console_launch.py"):
+                "fs42-tuner/schedlock.py", "fs42-tuner/rundir.py", "fs42-tuner/webget.py", "fs42-tuner/ordering.py",
+                "fieldstation42/console_launch.py"):
         shutil.copy(os.path.join(REPO, src), os.path.join(root, "wrapper", os.path.basename(src)))
-    for src in ("supervisor/supervisor.py", "fs42-tuner/stations.py"):
+    for src in ("supervisor/supervisor.py", "fs42-tuner/stations.py", "fs42-tuner/rundir.py"):
         shutil.copy(os.path.join(REPO, src), os.path.join(root, "supervisor", os.path.basename(src)))
     name = f"shots-{os.getpid()}"
     subprocess.run(["docker", "run", "-d", "--name", name, "--network", "host", "-e", "DASHBOARD_LOGIN=0", "-e", "SYNC_ENABLED=0",
+                    "-e", f"PUID={os.getuid()}", "-e", f"PGID={os.getgid()}", "--tmpfs", "/cache:size=1g,mode=1777",
+                    "-e", "PREFETCH_STREAM_ANY=1", "-e", "PREFETCH_STREAM_MIN_MB=20", "-e", "PREFETCH_MAX_MB=900",
                     "-v", f"{root}/config:/config", "-v", f"{root}/catalog:/app/catalog", "-v", f"{os.path.abspath(a.media)}:/mnt/media:ro",
                     "-v", f"{REPO}/fs42-tuner:/opt/tuner:ro", "-v", f"{root}/wrapper:/opt/wrapper:ro",
                     "-v", f"{root}/supervisor:/opt/supervisor:ro", "-v", f"{REPO}/assets:/opt/assets:ro", a.image], check=True, capture_output=True)
@@ -208,10 +211,29 @@ def main():
         week = lambda d: {n: d for n in ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")}
         sched = lambda d: {"default": week(d), "events": [], "seasons": {"dates": {"spring": "03-01", "summer": "06-01", "fall": "09-01", "winter": "12-01"},
                                                                          "spring": None, "summer": None, "fall": None, "winter": None}}
+        eps = req("GET", "/api/stations/show-episodes?list=Holiday%20cartoons")[1]
+        second = (eps.get("episodes") or [""])[min(1, max(len(eps.get("episodes") or []) - 1, 0))]
+        DAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+        weeknight = {}                                    # Mon-Fri 12:00-13:00 is ONE linked slot of Holiday cartoons, Friday its premiere night
+        for d in DAYS:
+            videos = [{"from": 0, "to": 12, "lists": ["Superman cartoons"]}, {"from": 12, "to": 13, "lists": ["Holiday cartoons"]},
+                      {"from": 13, "to": 24, "lists": ["Superman cartoons"]}]
+            if d in DAYS[:5]:
+                videos[1]["span"] = "weeknight1"
+            if d == "friday":
+                videos[1]["premiere"] = True
+            weeknight[d] = {"videos": videos, "commercials": [], "cards": []}
         stations = [
             {"name": "Saturday Cartoons", "number": 3, "kind": "standard", "increment": 15, "pack": False, "bump": "We'll be right back", "bump_end": "Welcome back",
-             "commercials": "Commercials", "midcards": True, "breaks": "end",
+             "commercials": "Commercials", "midcards": True, "gen_cards": True, "breaks": "end",
              "schedule": sched(day((0, 12, ["Superman cartoons"]), (12, 24, ["Holiday cartoons"])))},
+            {"name": "Weeknight Cartoons", "number": 5, "kind": "standard", "increment": 30, "pack": False, "bump": "We'll be right back", "bump_end": "Welcome back",
+             "commercials": "Commercials", "midcards": False,
+             "schedule": {"default": weeknight, "events": [], "premieres": {"Holiday cartoons": {"from": second, "since": time.strftime("%Y-%m-%d")}},
+                          "seasons": {"dates": {"spring": "03-01", "summer": "06-01", "fall": "09-01", "winter": "12-01"},
+                                      "spring": None, "summer": None, "fall": None, "winter": None}}},
+            {"name": "Commercial Break TV", "number": 6, "kind": "standard", "increment": 5, "pack": True, "bump": "We'll be right back", "commercials": "", "midcards": False,
+             "schedule": sched(day((0, 24, ["Commercials"])))},
             {"name": "Movie Night", "number": 4, "kind": "standard", "increment": 15, "bump": "We'll be right back", "commercials": "", "midcards": False,
              "pack": False,
              "schedule": sched(day((0, 24, ["Movies"])))},
@@ -239,6 +261,20 @@ def main():
             time.sleep(12)                                  # the dashboard restarts for a new station
             wait(lambda: req("GET", "/api/stations")[0] == 200, "the dashboard", 60)
             build(f["name"])
+        # somebody watching two channels, so the joins between pieces are recorded (the dashboard's Joins card)
+        import threading
+
+        def watch(ch, secs):
+            try:
+                r = urllib.request.urlopen(f"{base}/auto/v{ch}", timeout=30)      # nosec B310 - the container started above
+                end = time.time() + secs
+                while time.time() < end and r.read(188 * 64):
+                    pass
+                r.close()
+            except Exception:
+                pass
+        for ch in (3, 6):
+            threading.Thread(target=watch, args=(ch, 900), daemon=True).start()
         if a.hdhomerun:
             code, out = req("POST", "/api/iptv/save", {"name": "Antenna", "type": "hdhomerun", "url": a.hdhomerun, "mode": "guide"})   # guide only: Jellyfin takes the channels from the tuner itself
             assert code == 200, out
@@ -281,6 +317,14 @@ def main():
         for number in (3, 4):
             threading.Thread(target=watch, args=(number,), daemon=True).start()
         time.sleep(40)                                  # the encoders start and run on a little, past a dark opening
+        # the card drawn for Saturday Cartoons: a frame of the clip (it is made in the background after the save)
+        wait(lambda: (req("GET", "/api/stations/get?name=Saturday%20Cartoons")[1].get("cards") or {}).get("state") in ("ok", "error"),
+             "the mid cards to be drawn", 240, 4)
+        for kind in ("start", "end"):
+            clips = glob.glob(os.path.join(root, "catalog", "**", ".generated-cards", f"* - {kind}.mp4"), recursive=True)
+            if clips:
+                subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", "0.5", "-i", clips[0], "-frames:v", "1",
+                                os.path.join(shots, f"mid-card-{kind}.png")], capture_output=True)
         page("index.html", "dashboard.png", 8, full=True)
         page("stations.html", "stations.png", 3)
         b.go(f"{base}/files.html", 3)
@@ -332,6 +376,15 @@ def main():
         time.sleep(0.5)
         b.js("[...document.querySelectorAll('.panel')].find(p => (p.querySelector('h2') || {}).textContent === 'Details').id = 'details-panel'")
         b.clip("#details-panel", os.path.join(shots, "station-details.png"))
+        # one linked slot Monday to Friday, with Friday as its premiere night: the editor with the preview of the nights
+        b.go(f"{base}/station.html?name=Weeknight%20Cartoons", 4)
+        b.js("""(() => { const col = document.querySelector('.cal-col[data-key="friday"]');
+          const blk = [...col.querySelectorAll('.cal-block:not(.ghost)')].find((x) => x.textContent.includes('Holiday'));
+          const r = blk.getBoundingClientRect();
+          const at = {bubbles: true, clientX: r.left + 8, clientY: r.top + 8, pointerId: 1, button: 0, isPrimary: true};
+          blk.dispatchEvent(new PointerEvent('pointerdown', at)); window.dispatchEvent(new PointerEvent('pointerup', at)); })()""")
+        time.sleep(3.0)
+        b.clip("#sched", os.path.join(shots, "calendar-premiere.png"))
         b.go(f"{base}/station.html", 3)
         b.clip("form", os.path.join(shots, "station-new.png"))
 
@@ -350,11 +403,10 @@ def main():
     finally:
         if b:
             b.close()
-        if a.keep:
-            return 0
-        subprocess.run(["docker", "stop", name], capture_output=True)
-        subprocess.run(["docker", "rm", name], capture_output=True)
-        shutil.rmtree(root, ignore_errors=True)
+        if not a.keep:                                       # (a return here would hide an error: leave the container and say so)
+            subprocess.run(["docker", "stop", name], capture_output=True)
+            subprocess.run(["docker", "rm", name], capture_output=True)
+            shutil.rmtree(root, ignore_errors=True)
 
 
 if __name__ == "__main__":

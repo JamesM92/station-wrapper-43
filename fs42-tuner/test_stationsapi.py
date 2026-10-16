@@ -917,6 +917,12 @@ class GeneratedCardsApiTest(Base):
         self.wait("Cartoons")
         self.assertEqual(self.drawn, ["Cartoons", "Cartoons"])                 # the same again is not
 
+    def test_cards_drawn_before_a_restart_are_still_reported_as_drawn(self):
+        self.api.save(None, form(midcards=True, gen_cards=True))
+        self.wait("Cartoons")
+        self.api._cards.clear()                                               # a new process: nothing remembered in memory
+        self.assertEqual(self.api.get("Cartoons")["cards"]["state"], "ok")
+
     def test_without_the_option_nothing_is_drawn(self):
         self.api.save(None, form(midcards=True))
         self.assertEqual(self.drawn, [])
