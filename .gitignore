@@ -19,3 +19,4 @@ scripts/fetch-demo-media.py
 scripts/make-screenshots.py
 demo-media/
 scripts/measure-joins.py
+scripts/verify-engine.py
