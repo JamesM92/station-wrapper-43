@@ -47,6 +47,8 @@ Open `http://<host>:5004`. A new install already has a Channel Guide on channel 
 | **Stations**: one card per channel, build and keep it going | **Lists & files**: browse your media, make lists, or use a series directly |
 | ![Status](docs/images/status.png) | ![Schedule](docs/images/schedule.png) |
 | **Status**: what is wrong first, with a button to fix it | **Schedule**: what plays when, down to each file in a break |
+| ![Premiere nights](docs/images/calendar-premiere.png) | ![A mid card drawn for a channel](docs/images/mid-card.png) |
+| **One slot on five days, with a premiere night**: change it once and every day follows; Friday plays the next new episode, the other days loop the older ones | **A mid card drawn for a channel**: 3D lettering that turns, drawn when you save (a frame of a 2 second clip) |
 | ![First run](docs/images/dashboard-first-run.png) | ![New station](docs/images/station-new.png) |
 | **First run**: the Getting started card and a channel in one click | **New station**: start from a template, then change anything |
 
