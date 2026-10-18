@@ -18,7 +18,7 @@
 # channel needs tkinter and a screen, so the tuner draws its own (fs42-tuner/guide_channel.py, with Pillow). The pip list below is hand-picked from
 # FieldStation42's install/requirements.in rather than installed wholesale, which would pull
 # mpv/GL/Qt bindings that only field_player uses.
-FROM python:3.11-slim-trixie
+FROM python:3.14-slim-trixie
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1
